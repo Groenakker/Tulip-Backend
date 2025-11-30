@@ -21,23 +21,25 @@ import warehousesRoutes from "./routes/warehouses.route.js";
 import permissionsRoutes from "./routes/permissions.route.js";
 import rolesRoutes from "./routes/roles.route.js";
 import usersRoutes from "./routes/users.route.js";
+import healthRoutes from "./routes/health.route.js";
 
 const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 // Configure CORS to allow credentials
 const corsOptions = {
-  origin: 'http://localhost:5173', // Frontend URL
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Frontend URL
   credentials: true, // Allow cookies to be sent
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
+app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/bpartners", bPartnerRoutes);
 app.use("/api/projects", projectRoutes);
