@@ -7,14 +7,18 @@ export const generateToken = (userId, res) => {
   const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
     expiresIn: '1h',
   });
-    res.cookie('token', token, {
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  res.cookie('token', token, {
     maxAge: 3600000, // 1 hour
-    httpOnly: true, 
-    secure: process.env.NODE_ENV !== 'development', // Use secure cookies in production
-    sameSite: 'Strict',
+    httpOnly: true,
+    secure: isProduction,                     // true on HTTPS in prod
+    sameSite: isProduction ? 'None' : 'Lax',  // None for cross-site, Lax/Strict for localhost
   });
+
   return token;
-}
+};
 
 export const verifyToken = (req, res, next) => {
   try {
