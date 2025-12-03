@@ -17,7 +17,8 @@
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.4",
-    "nodemailer": "^7.0.10"
+    "nodemailer": "^7.0.10",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import serverless from "serverless-http";
 
 // Load environment variables FIRST before any other imports
 dotenv.config();
@@ -39,6 +40,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+
+// CONNECT TO MONGO (works on Vercel + Local)
+await connectDB();
+
+// ROUTES
 app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/bpartners", bPartnerRoutes);
@@ -54,7 +61,19 @@ app.use("/api/permissions", permissionsRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
 
-app.listen(PORT, () => {
-    console.log("server is running on port " + PORT);
-    connectDB();
-});
+// app.listen(PORT, () => {
+//     console.log("server is running on port " + PORT);
+//     connectDB();
+// });
+
+
+// EXPORT FOR VERCEL (Serverless)
+export const handler = serverless(app);
+
+// LOCAL DEVELOPMENT FALLBACK
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () =>
+    console.log(`Local server running at http://localhost:${PORT}`)
+  );
+}
