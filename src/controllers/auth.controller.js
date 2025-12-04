@@ -567,18 +567,23 @@ export const login = async (req, res) => {
 
 export const logout = (req, res) => {
   try {
-    res.cookie("token", "", { 
-      maxAge: 0,
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("token", "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV !== 'development',
-      sameSite: 'Strict',
+      secure: isProduction,                 // Must match login cookie
+      sameSite: isProduction ? "None" : "Lax",
+      expires: new Date(0),                 // Best practice for removing cookie
     });
+
     res.status(200).json({ message: "Logout successful" });
+
   } catch (error) {
     console.error("Error during logout:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
-}
+};
+
 
 export const getMe = async (req, res) => {
   try {
