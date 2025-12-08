@@ -29,7 +29,26 @@ const sampleSchema = new mongoose.Schema(
     signatureImage: { type: String },
     // store full submission form here so UI fields persist
     formData: { type: mongoose.Schema.Types.Mixed },
+     // Requested tests for this sample
+     requestedTests: [{
+      testCodeId: { type: mongoose.Schema.Types.ObjectId, ref: "Testcode" },
+      grkCode: { type: String },
+      description: { type: String },
+      samplesSubmitted: { type: String },
+      extractionTime: { type: String },
+      extractionTemp: { type: String },
+      quality: { type: String, enum: ["GLP", "Non-GLP"] },
+      category: { type: String },
+      extractBased: { type: String }
+    }],
+    // Test metadata
+    testMetadata: {
+      totalSamplesSubmitted: { type: String },
+      serviceLevel: { type: String, enum: ["Standard", "Expedited"] },
+      notes: { type: String }
+    }
   },
+  
   { timestamps: true }
 );
 
