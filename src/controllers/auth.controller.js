@@ -363,7 +363,7 @@ export const inviteUser = async (req, res) => {
     });
 
     const baseUrl =
-      process.env.INVITE_BASE_URL ||
+      process.env.FRONTEND_URL ||
       process.env.CLIENT_BASE_URL ||
       "http://localhost:5173";
 
