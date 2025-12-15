@@ -25,12 +25,12 @@ const projectSchema = new mongoose.Schema(
       enum: ["Active", "Completed", "On Hold", "Cancelled"],
       default: "Active",
     },
-    // projectID: {
-    //   type: String,
-    //   required: true,
-    //   unique: true,
-    //   trim: true,
-    // },
+    projectID: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
     actDate: {
       type: Date,
       required: true,

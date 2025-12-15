@@ -35,7 +35,7 @@ export const getProjectById = async (req, res) => {
 }
 
 export const createProject = async (req, res) => {
-  const { description,startDate,endDate,projectID,name, status, actDate, estDate, poNumber, poDate, commitDate, quoteNumber, salesOrderNumber , bPartnerID } = req.body;
+  const { description,startDate,endDate,projectID,name, status, actDate, estDate, poNumber, poDate, commitDate, quoteNumber, salesOrderNumber , bPartnerID , bPartnerCode } = req.body;
   
   try {
     const newProject = new Project({
@@ -52,7 +52,8 @@ export const createProject = async (req, res) => {
       commitDate,
       salesOrderNumber,
       quoteNumber,
-      bPartnerID
+      bPartnerID,
+      bPartnerCode
     });
     
     await newProject.save();
@@ -78,7 +79,8 @@ export const updateProject = async (req, res) => {
     commitDate,
     quoteNumber,
     salesOrderNumber,
-    bPartnerID
+    bPartnerID,
+    bPartnerCode
   } = req.body;
 
   try {
@@ -98,7 +100,8 @@ export const updateProject = async (req, res) => {
         commitDate,
         quoteNumber,
         salesOrderNumber,
-        bPartnerID
+        bPartnerID,
+        bPartnerCode
       },
       { new: true }
     );

@@ -5,6 +5,59 @@ import Sample from "../models/samples.models.js";
 import Testcode from "../models/testCodes.models.js";
 import Contact from "../models/contacts.models.js";
 
+// Add a contact directly to the embedded contacts array for a business partner
+export const addPartnerContact = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, phone, jobTitle } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ message: "Contact name is required" });
+  }
+
+  try {
+    const updatedPartner = await Bpartner.findByIdAndUpdate(
+      id,
+      { $push: { contacts: { name, email, phone, jobTitle } } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedPartner) {
+      return res.status(404).json({ message: "Partner not found" });
+    }
+
+    // return the newly added contact (last element after push)
+    const newContact = updatedPartner.contacts[updatedPartner.contacts.length - 1];
+    res.status(201).json({ message: "Contact added", contact: newContact });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to add contact", error: error.message });
+  }
+};
+
+// Remove a contact from the embedded contacts array
+export const deletePartnerContact = async (req, res) => {
+  const { id, contactId } = req.params;
+
+  try {
+    const partner = await Bpartner.findById(id);
+
+    if (!partner) {
+      return res.status(404).json({ message: "Partner not found" });
+    }
+
+    const contact = partner.contacts.id(contactId);
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found for this partner" });
+    }
+
+    contact.deleteOne();
+    await partner.save();
+
+    res.json({ message: "Contact deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete contact", error: error.message });
+  }
+};
+
 export const getAllPartners = async (req, res) => {
   try {
     const partners = await Bpartner.find();

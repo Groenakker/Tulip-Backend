@@ -65,6 +65,14 @@ const bpartnerSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    contacts: [
+      {
+        name: { type: String, trim: true },
+        email: { type: String, lowercase: true, trim: true },
+        phone: { type: String, trim: true },
+        jobTitle: { type: String, trim: true },
+      },
+    ],
   },
   {
     timestamps: true,
