@@ -73,12 +73,13 @@ const bpartnerSchema = new mongoose.Schema(
         jobTitle: { type: String, trim: true },
       },
     ],
-  },
-  {
-    timestamps: true,
-  }
-);
+    testCodes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Testcode",
+      }
+    ],
+  },);
 
 const Bpartner = mongoose.model("Bpartner", bpartnerSchema);
-
 export default Bpartner;

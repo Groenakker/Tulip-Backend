@@ -58,9 +58,84 @@ export const deletePartnerContact = async (req, res) => {
   }
 };
 
+// Add a test code to a business partner's testCodes array
+export const addPartnerTestCode = async (req, res) => {
+  const { id } = req.params;
+  const { testCodeId } = req.body;
+
+  if (!testCodeId) {
+    return res.status(400).json({ message: "Test code ID is required" });
+  }
+
+  try {
+    // Verify that the test code exists
+    const testCode = await Testcode.findById(testCodeId);
+    if (!testCode) {
+      return res.status(404).json({ message: "Test code not found" });
+    }
+
+    // Check if partner exists
+    const partner = await Bpartner.findById(id);
+    if (!partner) {
+      return res.status(404).json({ message: "Partner not found" });
+    }
+
+    // Check if test code is already in the array (convert to string for comparison)
+    const testCodeExists = partner.testCodes.some(
+      (tc) => tc.toString() === testCodeId
+    );
+
+    if (testCodeExists) {
+      return res.status(400).json({ message: "Test code already added to this partner" });
+    }
+
+    // Add the test code
+    partner.testCodes.push(testCodeId);
+    await partner.save();
+
+    // Populate the test code to return full details
+    await partner.populate("testCodes");
+    const addedTestCode = partner.testCodes[partner.testCodes.length - 1];
+
+    res.status(201).json({ message: "Test code added successfully", testCode: addedTestCode });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to add test code", error: error.message });
+  }
+};
+
+// Remove a test code from a business partner's testCodes array
+export const removePartnerTestCode = async (req, res) => {
+  const { id, testCodeId } = req.params;
+
+  try {
+    const partner = await Bpartner.findById(id);
+
+    if (!partner) {
+      return res.status(404).json({ message: "Partner not found" });
+    }
+
+    // Check if test code exists in the array (convert to string for comparison)
+    const testCodeExists = partner.testCodes.some(
+      (tc) => tc.toString() === testCodeId
+    );
+
+    if (!testCodeExists) {
+      return res.status(404).json({ message: "Test code not found for this partner" });
+    }
+
+    // Remove the test code using pull method
+    partner.testCodes.pull(testCodeId);
+    await partner.save();
+
+    res.json({ message: "Test code removed successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to remove test code", error: error.message });
+  }
+};
+
 export const getAllPartners = async (req, res) => {
   try {
-    const partners = await Bpartner.find();
+    const partners = await Bpartner.find().populate("testCodes");
     
     if (!partners) {
       return res.status(404).json({ message: "No partners found" });
@@ -78,7 +153,7 @@ export const getAllPartners = async (req, res) => {
 export const getPartnerById = async (req, res) => {
   const { id } = req.params;
   try {
-    const partner = await Bpartner.findById(id);
+    const partner = await Bpartner.findById(id).populate("testCodes");
     
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });

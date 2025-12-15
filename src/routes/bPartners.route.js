@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllPartners , getPartnerById , createPartner , updatePartner , deletePartner , getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact} from "../controllers/bPartner.controller.js";
+import { getAllPartners , getPartnerById , createPartner , updatePartner , deletePartner , getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode} from "../controllers/bPartner.controller.js";
 
 const router = express.Router();
 
@@ -16,6 +16,10 @@ router.put("/:id", updatePartner);
 router.delete("/:id", deletePartner);
 
 router.delete("/:id/contacts/:contactId", deletePartnerContact);
+
+router.post("/:id/testCodes", addPartnerTestCode);
+
+router.delete("/:id/testCodes/:testCodeId", removePartnerTestCode);
 
 router.get("/:id/related" , getRelatedDataForPartner);
 
