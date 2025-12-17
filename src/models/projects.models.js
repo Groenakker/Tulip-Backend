@@ -65,10 +65,10 @@ const projectSchema = new mongoose.Schema(
       ref: "Bpartner",
       required: true,
     },
-    contactID: {
+    contact: {
       // type: mongoose.Schema.Types.ObjectId,
       type: String,
-      ref: "Contact",
+      
     },
     commitDate: {
       type: Date,
@@ -78,6 +78,7 @@ const projectSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+   
     salesOrderNumber: {
       type: String,
       required: true,
