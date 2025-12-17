@@ -704,4 +704,61 @@ export const refreshToken = async (req, res) => {
     console.error("Error in refreshToken:", error.message);
     return res.status(500).json({ message: "Internal server error" });
   }
+}
+
+export const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    // Validate required fields
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        message: "Current password and new password are required" 
+      });
+    }
+
+    // Validate new password length
+    if (newPassword.length < 8) {
+      return res.status(400).json({ 
+        message: "New password must be at least 8 characters long" 
+      });
+    }
+
+    // Get user with password field (needed for comparison)
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Verify current password
+    const isPasswordCorrect = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isPasswordCorrect) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Check if new password is different from current password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({ 
+        message: "New password must be different from current password" 
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update user password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ 
+      message: "Password changed successfully" 
+    });
+  } catch (error) {
+    console.error("Error in changePassword:", error.message);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 } 

@@ -1,5 +1,6 @@
 import User from "../models/user.models.js";
 import Role from "../models/roles.models.js";
+import { uploadFileToSupabase, deleteFileFromSupabase } from "../lib/supabase.js";
 
 export const getAllUsers = async (req, res) => {
   try {
@@ -245,6 +246,149 @@ export const getUserPermissions = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch user permissions", error: error.message });
+  }
+};
+
+// Update user profile (name, profilePicture)
+export const updateUserProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, profilePicture } = req.body;
+
+    // Find user
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Prepare update object
+    const updateData = {};
+    let profilePictureUrl = null;
+
+    // Handle name update
+    if (name !== undefined && name !== null) {
+      // Check if name is unique (excluding current user)
+      const existingUser = await User.findOne({ 
+        name: name.trim(), 
+        _id: { $ne: id } 
+      });
+      
+      if (existingUser) {
+        return res.status(400).json({ message: "Name already exists" });
+      }
+      
+      updateData.name = name.trim();
+    }
+
+    // Handle profile picture update
+    // Priority: 1. Multer file upload, 2. Base64 string in body, 3. Explicit null/empty
+    if (req.file) {
+      // Handle file uploaded via multer (multipart/form-data)
+      try {
+        const fileName = req.file.originalname || `profile-${id}`;
+        
+        // Upload to Supabase
+        const uploadResult = await uploadFileToSupabase(
+          req.file.buffer,
+          fileName,
+          'user_media',
+          `users/${id}`,
+          req.file.mimetype
+        );
+
+        profilePictureUrl = uploadResult.url;
+
+        // Delete old profile picture from Supabase if it exists and is not default
+        if (user.profilePicture && 
+            user.profilePicture !== "default.jpg" && 
+            user.profilePicture.startsWith('http')) {
+          try {
+            const oldPath = user.profilePicture.split('/user_media/')[1];
+            if (oldPath) {
+              await deleteFileFromSupabase(oldPath, 'user_media');
+            }
+          } catch (deleteError) {
+            console.error('Error deleting old profile picture:', deleteError);
+          }
+        }
+
+        updateData.profilePicture = profilePictureUrl;
+      } catch (uploadError) {
+        return res.status(500).json({ 
+          message: "Failed to upload profile picture", 
+          error: uploadError.message 
+        });
+      }
+    } else if (profilePicture !== undefined) {
+      // Handle base64 string or explicit null/empty
+      if (profilePicture && profilePicture !== "" && profilePicture !== "null") {
+        try {
+          // Handle base64 string
+          let fileName = `profile-${id}`;
+          let fileData = profilePicture;
+
+          if (typeof profilePicture === 'string' && profilePicture.startsWith('data:')) {
+            // Extract file extension from base64 data URL
+            const matches = profilePicture.match(/data:image\/(\w+);base64,/);
+            const extension = matches ? matches[1] : 'jpg';
+            fileName = `profile-${id}.${extension}`;
+          }
+
+          // Upload to Supabase
+          const uploadResult = await uploadFileToSupabase(
+            fileData,
+            fileName,
+            'user_media',
+            `users/${id}`
+          );
+
+          profilePictureUrl = uploadResult.url;
+
+          // Delete old profile picture from Supabase if it exists and is not default
+          if (user.profilePicture && 
+              user.profilePicture !== "default.jpg" && 
+              user.profilePicture.startsWith('http')) {
+            try {
+              const oldPath = user.profilePicture.split('/user_media/')[1];
+              if (oldPath) {
+                await deleteFileFromSupabase(oldPath, 'user_media');
+              }
+            } catch (deleteError) {
+              console.error('Error deleting old profile picture:', deleteError);
+            }
+          }
+
+          updateData.profilePicture = profilePictureUrl;
+        } catch (uploadError) {
+          return res.status(500).json({ 
+            message: "Failed to upload profile picture", 
+            error: uploadError.message 
+          });
+        }
+      } else {
+        // If profilePicture is null/empty, set to default
+        updateData.profilePicture = "default.jpg";
+      }
+    }
+
+    // Update user
+    if (Object.keys(updateData).length > 0) {
+      updateData.updatedBy = req.userId;
+      Object.assign(user, updateData);
+      await user.save();
+    }
+
+    // Return updated user
+    const updatedUser = await User.findById(id)
+      .select("-password")
+      .populate("roles", "name description permissions isActive")
+      .populate("roles.permissions.permissionId", "module availableActions description")
+      .populate("company_id", "name")
+      .populate("updatedBy", "name email");
+
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update user profile", error: error.message });
   }
 };
 

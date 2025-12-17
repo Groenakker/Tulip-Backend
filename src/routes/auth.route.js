@@ -11,6 +11,7 @@ import {
   validateInvite,
   acceptInvite,
   getMyPermissions,
+  changePassword,
 } from "../controllers/auth.controller.js";
 import { verifyToken, verifyTokenForRefresh } from "../lib/utils.js";
 
@@ -36,5 +37,7 @@ router.get("/me", verifyToken, getMe);
 router.get("/me/permissions", verifyToken, getMyPermissions);
 
 router.post("/refresh", verifyTokenForRefresh, refreshToken);
+
+router.post("/change-password", verifyToken, changePassword);
 
 export default router;
