@@ -6,9 +6,11 @@ import {
   addRoleToUser,
   removeRoleFromUser,
   getUserPermissions,
+  updateUserProfile,
 } from "../controllers/users.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
+import { uploadProfilePicture, handleMulterError } from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
@@ -55,6 +57,15 @@ router.delete(
   "/:id/roles",
   checkPermission("Users", "update"),
   removeRoleFromUser
+);
+
+// Update user profile (name, profilePicture) (requires Users module update permission)
+router.patch(
+  "/:id/profile",
+  checkPermission("Users", "update"),
+  uploadProfilePicture, // Handle multipart/form-data file uploads (optional)
+  handleMulterError, // Handle multer errors
+  updateUserProfile
 );
 
 export default router;

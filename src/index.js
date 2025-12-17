@@ -25,7 +25,9 @@ import healthRoutes from "./routes/health.route.js";
 
 const app = express();
 
-app.use(express.json());
+// Increase JSON body parser limit to handle large base64 images (10MB)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 3000;
@@ -47,7 +49,7 @@ const corsOptions = {
     }
   },
   credentials: true, // Allow cookies to be sent
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
