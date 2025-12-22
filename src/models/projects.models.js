@@ -14,11 +14,11 @@ const projectSchema = new mongoose.Schema(
     },
     startDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     endDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     status: {
       type: String,
@@ -33,11 +33,11 @@ const projectSchema = new mongoose.Schema(
     },
     actDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     estDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -49,11 +49,11 @@ const projectSchema = new mongoose.Schema(
     },
     poNumber: {
       type: String,
-      required: true,
+      required: false,
     },
     poDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     bPartnerCode: {
       type: String,
@@ -72,16 +72,16 @@ const projectSchema = new mongoose.Schema(
     },
     commitDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     quoteNumber: {
       type: String,
-      required: true,
+      required: false,
     },
    
     salesOrderNumber: {
       type: String,
-      required: true,
+      required: false,
     },
     image: {
       type: String, // Will store base64 string
