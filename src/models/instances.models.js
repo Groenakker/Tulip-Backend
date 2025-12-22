@@ -28,6 +28,12 @@ const instanceSchema = new mongoose.Schema(
       enum: ["Pending", "In Testing", "Completed", "Failed", "Cancelled"],
       default: "Pending",
     },
+    warehouseID: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false,
+      trim: true,
+      ref: "Warehouse",
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

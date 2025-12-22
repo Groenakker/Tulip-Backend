@@ -33,7 +33,7 @@ export const getInstanceById = async (req, res) => {
 };
 
 export const createInstance = async (req, res) => {
-  const { instanceCode, idSample, sampleCode, lotNo, status, createdBy, updatedBy } = req.body;
+  const { instanceCode, idSample, sampleCode, lotNo, status, warehouseID, createdBy, updatedBy } = req.body;
   
   try {
     // Check if instance code already exists
@@ -48,6 +48,7 @@ export const createInstance = async (req, res) => {
       sampleCode,
       lotNo,
       status: status || "Pending",
+      warehouseID,
       createdBy,
       updatedBy
     });
@@ -61,7 +62,7 @@ export const createInstance = async (req, res) => {
 
 export const updateInstance = async (req, res) => {
   const { id } = req.params;
-  const { instanceCode, idSample, sampleCode, lotNo, status, updatedBy } = req.body;
+  const { instanceCode, idSample, sampleCode, lotNo, status, warehouseID, updatedBy } = req.body;
 
   try {
     // If instanceCode is being updated, check if it already exists
@@ -83,10 +84,11 @@ export const updateInstance = async (req, res) => {
         sampleCode,
         lotNo,
         status,
+        warehouseID,
         updatedBy
       },
       { new: true }
-    ).populate('idSample', 'name description').populate('createdBy', 'name email').populate('updatedBy', 'name email');
+    ).populate('idSample', 'name description').populate('createdBy', 'name email').populate('updatedBy', 'name email').populate('warehouseID', 'warehouseID address storage space');
 
     if (!updatedInstance) {
       return res.status(404).json({ message: "Instance not found" });
