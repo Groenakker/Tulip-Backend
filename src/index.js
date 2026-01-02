@@ -6,6 +6,10 @@ import cors from "cors";
 // Load environment variables FIRST before any other imports
 dotenv.config();
 
+// Validate environment variables
+import { validateEnv } from "./config/env.js";
+validateEnv();
+
 import { connectDB } from "./lib/db.js";
 import "./lib/redis.js"; // Initialize Redis connection
 import authRoutes from "./routes/auth.route.js";
@@ -41,6 +45,11 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
+    // In production, reject requests with no origin
+    if (process.env.NODE_ENV === 'production' && !origin) {
+      return callback(new Error('Not allowed by CORS'));
+    }
+
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -70,6 +79,6 @@ app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
 
 app.listen(PORT, () => {
-    console.log("server is running on port " + PORT);
-    connectDB();
+  console.log("server is running on port " + PORT);
+  connectDB();
 });

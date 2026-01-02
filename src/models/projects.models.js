@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const projectSchema = new mongoose.Schema(
   {
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -28,7 +34,6 @@ const projectSchema = new mongoose.Schema(
     projectID: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     actDate: {
@@ -60,15 +65,13 @@ const projectSchema = new mongoose.Schema(
       required: true,
     },
     bPartnerID: {
-      // type: mongoose.Schema.Types.ObjectId,
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Bpartner",
       required: true,
     },
     contact: {
-      // type: mongoose.Schema.Types.ObjectId,
-      type: String,
-      
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Contact",
     },
     commitDate: {
       type: Date,
@@ -78,7 +81,7 @@ const projectSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
-   
+
     salesOrderNumber: {
       type: String,
       required: false,
@@ -89,9 +92,14 @@ const projectSchema = new mongoose.Schema(
     },
   },
 
-  { timestamp: true }
-);  
-   
+  { timestamps: true }
+);
+
+// Compound indexes for common queries
+projectSchema.index({ company_id: 1, status: 1 });
+projectSchema.index({ company_id: 1, createdAt: -1 });
+projectSchema.index({ company_id: 1, projectID: 1 }, { unique: true });
+
 
 const Project = mongoose.model("Project", projectSchema);
 

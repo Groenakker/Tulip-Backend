@@ -34,10 +34,11 @@ export const checkRole = (requiredRoles) => {
         ? requiredRoles.map((r) => r.toLowerCase().trim())
         : [requiredRoles.toLowerCase().trim()];
 
-      // Get all active roles for the user
+      // Get all active roles for the user, scoped to user's company
       const roleIds = user.roles.map((role) => (role._id ? role._id : role));
       const roles = await Role.find({
         _id: { $in: roleIds },
+        company_id: user.company_id, // CRITICAL: Filter by tenant
         isActive: true,
       });
 
@@ -95,6 +96,7 @@ export const checkAllRoles = (requiredRoles) => {
       const roleIds = user.roles.map((role) => (role._id ? role._id : role));
       const roles = await Role.find({
         _id: { $in: roleIds },
+        company_id: user.company_id, // CRITICAL: Filter by tenant
         isActive: true,
       });
 

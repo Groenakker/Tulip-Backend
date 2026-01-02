@@ -2,10 +2,15 @@ import mongoose from "mongoose";
 
 const shippingSchema = new mongoose.Schema(
   {
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
     shippingCode: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     shipmentOrigin: {
@@ -36,9 +41,9 @@ const shippingSchema = new mongoose.Schema(
       default: "Pending",
     },
     projectID: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
       required: true,
-      trim: true,
     },
     estimatedArrivalDate: {
       type: Date,
@@ -61,14 +66,12 @@ const shippingSchema = new mongoose.Schema(
       required: true,
     },
     bPartnerID: {
-      // type: mongoose.Schema.Types.ObjectId,
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Bpartner",
       required: true,
     },
     contactID: {
-      // type: mongoose.Schema.Types.ObjectId,
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Contact",
     },
     image: {
@@ -77,9 +80,15 @@ const shippingSchema = new mongoose.Schema(
     },
   },
 
-  { timestamp: true }
-);  
-   
+  { timestamps: true }
+);
+
+// Compound indexes for common queries
+shippingSchema.index({ company_id: 1, status: 1 });
+shippingSchema.index({ company_id: 1, createdAt: -1 });
+shippingSchema.index({ company_id: 1, shippingCode: 1 }, { unique: true });
+shippingSchema.index({ company_id: 1, projectID: 1 });
+
 
 const Shipping = mongoose.model("Shipping", shippingSchema);
 

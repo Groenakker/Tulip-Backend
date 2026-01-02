@@ -1,28 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 
-dotenv.config();
-
+// Note: SUPABASE_URL and SUPABASE_KEY are validated at application startup in src/index.js
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_KEY in .env file');
-}
 
 // Regular client for public operations (uses anon key)
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Admin client for server-side operations that bypass RLS (uses service role key)
 // Use service role key if available, otherwise fall back to regular key
-const supabaseAdmin = supabaseServiceRoleKey 
+const supabaseAdmin = supabaseServiceRoleKey
   ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
   : supabase;
 
 /**
@@ -46,7 +40,7 @@ export const uploadFileToSupabase = async (file, fileName, bucket = 'user_media'
     // Convert base64 to buffer if needed and extract mimeType
     let fileBuffer;
     let detectedMimeType = mimeType;
-    
+
     if (typeof file === 'string') {
       // Handle base64 string
       const mimeMatch = file.match(/data:([^;]+);base64,/);

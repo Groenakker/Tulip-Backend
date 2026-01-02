@@ -64,16 +64,17 @@ export const updateUserRoles = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Validate that all role IDs exist and are active
+    // Validate that all role IDs exist and are active, and belong to user's company
     if (roleIds.length > 0) {
       const roles = await Role.find({
         _id: { $in: roleIds },
+        company_id: user.company_id, // CRITICAL: Filter by tenant
         isActive: true,
       });
 
       if (roles.length !== roleIds.length) {
         return res.status(400).json({
-          message: "One or more role IDs are invalid or inactive",
+          message: "One or more role IDs are invalid, inactive, or do not belong to your company",
         });
       }
     }
@@ -111,14 +112,15 @@ export const addRoleToUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Validate role exists and is active
+    // Validate role exists, is active, and belongs to user's company
     const role = await Role.findOne({
       _id: roleId,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
       isActive: true,
     });
 
     if (!role) {
-      return res.status(400).json({ message: "Role not found or inactive" });
+      return res.status(400).json({ message: "Role not found, inactive, or does not belong to your company" });
     }
 
     // Check if user already has this role
@@ -204,6 +206,7 @@ export const getUserPermissions = async (req, res) => {
     const roleIds = user.roles.map((role) => (role._id ? role._id : role));
     const roles = await Role.find({
       _id: { $in: roleIds },
+      company_id: user.company_id, // CRITICAL: Filter by tenant
       isActive: true,
     }).populate("permissions.permissionId");
 
@@ -268,15 +271,15 @@ export const updateUserProfile = async (req, res) => {
     // Handle name update
     if (name !== undefined && name !== null) {
       // Check if name is unique (excluding current user)
-      const existingUser = await User.findOne({ 
-        name: name.trim(), 
-        _id: { $ne: id } 
+      const existingUser = await User.findOne({
+        name: name.trim(),
+        _id: { $ne: id }
       });
-      
+
       if (existingUser) {
         return res.status(400).json({ message: "Name already exists" });
       }
-      
+
       updateData.name = name.trim();
     }
 
@@ -286,7 +289,7 @@ export const updateUserProfile = async (req, res) => {
       // Handle file uploaded via multer (multipart/form-data)
       try {
         const fileName = req.file.originalname || `profile-${id}`;
-        
+
         // Upload to Supabase
         const uploadResult = await uploadFileToSupabase(
           req.file.buffer,
@@ -299,9 +302,9 @@ export const updateUserProfile = async (req, res) => {
         profilePictureUrl = uploadResult.url;
 
         // Delete old profile picture from Supabase if it exists and is not default
-        if (user.profilePicture && 
-            user.profilePicture !== "default.jpg" && 
-            user.profilePicture.startsWith('http')) {
+        if (user.profilePicture &&
+          user.profilePicture !== "default.jpg" &&
+          user.profilePicture.startsWith('http')) {
           try {
             const oldPath = user.profilePicture.split('/user_media/')[1];
             if (oldPath) {
@@ -314,9 +317,9 @@ export const updateUserProfile = async (req, res) => {
 
         updateData.profilePicture = profilePictureUrl;
       } catch (uploadError) {
-        return res.status(500).json({ 
-          message: "Failed to upload profile picture", 
-          error: uploadError.message 
+        return res.status(500).json({
+          message: "Failed to upload profile picture",
+          error: uploadError.message
         });
       }
     } else if (profilePicture !== undefined) {
@@ -345,9 +348,9 @@ export const updateUserProfile = async (req, res) => {
           profilePictureUrl = uploadResult.url;
 
           // Delete old profile picture from Supabase if it exists and is not default
-          if (user.profilePicture && 
-              user.profilePicture !== "default.jpg" && 
-              user.profilePicture.startsWith('http')) {
+          if (user.profilePicture &&
+            user.profilePicture !== "default.jpg" &&
+            user.profilePicture.startsWith('http')) {
             try {
               const oldPath = user.profilePicture.split('/user_media/')[1];
               if (oldPath) {
@@ -360,9 +363,9 @@ export const updateUserProfile = async (req, res) => {
 
           updateData.profilePicture = profilePictureUrl;
         } catch (uploadError) {
-          return res.status(500).json({ 
-            message: "Failed to upload profile picture", 
-            error: uploadError.message 
+          return res.status(500).json({
+            message: "Failed to upload profile picture",
+            error: uploadError.message
           });
         }
       } else {

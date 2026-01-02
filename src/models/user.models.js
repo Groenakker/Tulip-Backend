@@ -5,12 +5,13 @@ const userSchema = new mongoose.Schema(
         name: {
             type: String,
             required: true,
-            unique: true,
             trim: true,
         },
         company_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Company",
+            required: true,
+            index: true,
         },
         companyName: {
             type: String,
@@ -28,7 +29,6 @@ const userSchema = new mongoose.Schema(
         email: {
             type: String,
             required: true,
-            unique: true,
             trim: true,
             lowercase: true,
         },
@@ -58,14 +58,17 @@ const userSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         },
-        isVerified: { 
-            type: Boolean, 
-            default: true 
+        isVerified: {
+            type: Boolean,
+            default: true
         },
     },
     {
         timestamps: true,
     });
+
+// Compound indexes for tenant-scoped uniqueness
+userSchema.index({ company_id: 1, email: 1 }, { unique: true });
 
 const User = mongoose.model("User", userSchema);
 

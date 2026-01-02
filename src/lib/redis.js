@@ -2,12 +2,8 @@ import Redis from 'ioredis';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-if (!process.env.REDIS_URL) {
-  throw new Error('REDIS_URL environment variable is required. Please set it in your .env file.');
-}
-
 // Connect to Redis Cloud using REDIS_URL
+// Note: REDIS_URL is validated at application startup in src/index.js
 const redis = new Redis(process.env.REDIS_URL, {
   retryStrategy: (times) => {
     const delay = Math.min(times * 50, 2000);

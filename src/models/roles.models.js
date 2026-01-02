@@ -18,10 +18,15 @@ const rolePermissionSchema = new mongoose.Schema(
 
 const roleSchema = new mongoose.Schema(
   {
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     description: {
@@ -54,9 +59,9 @@ const roleSchema = new mongoose.Schema(
   }
 );
 
-// Index for faster queries
-roleSchema.index({ name: 1 });
-roleSchema.index({ isActive: 1 });
+// Compound indexes for tenant-scoped uniqueness
+roleSchema.index({ company_id: 1, name: 1 }, { unique: true });
+roleSchema.index({ company_id: 1, isActive: 1 });
 
 const Role = mongoose.model("Role", roleSchema);
 

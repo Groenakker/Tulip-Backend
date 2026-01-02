@@ -2,9 +2,15 @@ import mongoose from "mongoose";
 
 const sampleSchema = new mongoose.Schema(
   {
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
     name: { type: String, trim: true },
     description: { type: String, trim: true },
-    sampleCode: { type: String, unique: true, trim: true },
+    sampleCode: { type: String, trim: true },
     startDate: { type: Date },
     endDate: { type: Date },
     status: {
@@ -12,7 +18,11 @@ const sampleSchema = new mongoose.Schema(
       enum: ["Active", "Completed", "On Hold", "Cancelled", "Draft"],
       default: "Draft",
     },
-    projectID: { type: String, trim: true },
+    projectID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      trim: true
+    },
     actDate: { type: Date },
     estDate: { type: Date },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -20,8 +30,14 @@ const sampleSchema = new mongoose.Schema(
     poNumber: { type: String },
     poDate: { type: Date },
     bPartnerCode: { type: String },
-    bPartnerID: { type: String, ref: "Bpartner" },
-    contactID: { type: String, ref: "Contact" },
+    bPartnerID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Bpartner"
+    },
+    contactID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Contact"
+    },
     commitDate: { type: Date },
     quoteNumber: { type: String },
     salesOrderNumber: { type: String },
@@ -29,8 +45,8 @@ const sampleSchema = new mongoose.Schema(
     signatureImage: { type: String },
     // store full submission form here so UI fields persist
     formData: { type: mongoose.Schema.Types.Mixed },
-     // Requested tests for this sample
-     requestedTests: [{
+    // Requested tests for this sample
+    requestedTests: [{
       testCodeId: { type: mongoose.Schema.Types.ObjectId, ref: "Testcode" },
       grkCode: { type: String },
       description: { type: String },
@@ -48,9 +64,15 @@ const sampleSchema = new mongoose.Schema(
       notes: { type: String }
     }
   },
-  
+
   { timestamps: true }
 );
+
+// Compound indexes for common queries
+sampleSchema.index({ company_id: 1, status: 1 });
+sampleSchema.index({ company_id: 1, createdAt: -1 });
+sampleSchema.index({ company_id: 1, sampleCode: 1 }, { unique: true });
+sampleSchema.index({ company_id: 1, projectID: 1 });
 
 const Sample = mongoose.model("Sample", sampleSchema);
 
