@@ -3,8 +3,15 @@ import mongoose from "mongoose";
 const sampleSchema = new mongoose.Schema(
   {
     projectName: { type: String, trim: true },
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
+    name: { type: String, trim: true },
     description: { type: String, trim: true },
-    sampleCode: { type: String, unique: true, trim: true },
+    sampleCode: { type: String, trim: true },
     startDate: { type: Date },
     endDate: { type: Date },
     status: {
@@ -12,8 +19,11 @@ const sampleSchema = new mongoose.Schema(
       enum: ["Active", "Completed", "On Hold", "Cancelled", "Draft", "Submitted", "Accepted", "Rejected"],
       default: "Draft",
     },
-    projectID: { type: String, trim: true },
-    projectId: { type: String, trim: true },
+    projectID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      trim: true
+    },
     actDate: { type: Date },
     estDate: { type: Date },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -22,7 +32,10 @@ const sampleSchema = new mongoose.Schema(
     poNumber: { type: String },
     poDate: { type: Date },
     bPartnerCode: { type: String },
-    bPartnerID: { type: String, ref: "Bpartner" },
+    bPartnerID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Bpartner"
+    },
     contactName: { type: String, trim: true },
     email: { type: String, lowercase: true, trim: true },
     phone: { type: String, trim: true },
@@ -133,9 +146,15 @@ const sampleSchema = new mongoose.Schema(
       notes: { type: String }
     }
   },
-  
+
   { timestamps: true }
 );
+
+// Compound indexes for common queries
+sampleSchema.index({ company_id: 1, status: 1 });
+sampleSchema.index({ company_id: 1, createdAt: -1 });
+sampleSchema.index({ company_id: 1, sampleCode: 1 }, { unique: true });
+sampleSchema.index({ company_id: 1, projectID: 1 });
 
 const Sample = mongoose.model("Sample", sampleSchema);
 

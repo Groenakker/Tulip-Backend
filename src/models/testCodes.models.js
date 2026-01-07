@@ -17,7 +17,7 @@ const testCodeSchema = new mongoose.Schema(
         },
         descriptionLong: {
             type: String,
-            
+
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
@@ -29,7 +29,7 @@ const testCodeSchema = new mongoose.Schema(
         },
         turnAroundTime: {
             type: Number,
-            
+
         },
         STPNumber: {
             type: String,
@@ -37,31 +37,31 @@ const testCodeSchema = new mongoose.Schema(
         },
         numberOfExtract: {
             type: Number,
-            
+
         },
         minDevPerExtract: {
             type: Number,
-            
+
         },
         MinSAPerExtract: {
             type: Number,
-          
+
         },
         minMLPerExtract: {
             type: Number,
-           
+
         },
         category: {
             type: String,
-            
-           
+
+
         },
         extractBased: {
             type: String,
         },
         minDevPerTest: {
             type: Number,
-           
+
         },
 
     },

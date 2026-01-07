@@ -4,9 +4,17 @@ import User from "../models/user.models.js";
 
 export const getAllRoles = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { isActive } = req.query;
-    const query = {};
-    
+    const query = {
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    };
+
     if (isActive !== undefined) {
       query.isActive = isActive === "true";
     }
@@ -25,8 +33,17 @@ export const getAllRoles = async (req, res) => {
 
 export const getRoleById = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { id } = req.params;
-    const role = await Role.findById(id)
+    const role = await Role.findOne({
+      _id: id,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    })
       .populate("permissions.permissionId", "module availableActions description")
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email");
@@ -43,14 +60,23 @@ export const getRoleById = async (req, res) => {
 
 export const createRole = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { name, description, permissions, isActive } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Role name is required" });
     }
 
-    // Check if role with same name already exists
-    const existingRole = await Role.findOne({ name });
+    // Check if role with same name already exists for this tenant
+    const existingRole = await Role.findOne({
+      name,
+      company_id: user.company_id, // CRITICAL: Check within tenant scope
+    });
     if (existingRole) {
       return res.status(400).json({ message: "Role with this name already exists" });
     }
@@ -90,11 +116,12 @@ export const createRole = async (req, res) => {
       description,
       permissions: permissions || [],
       isActive: isActive !== undefined ? isActive : true,
+      company_id: user.company_id, // CRITICAL: Set tenant scope
       createdBy: req.userId,
     });
 
     await role.save();
-    
+
     const populated = await Role.findById(role._id)
       .populate("permissions.permissionId", "module availableActions description")
       .populate("createdBy", "name email");
@@ -107,10 +134,19 @@ export const createRole = async (req, res) => {
 
 export const updateRole = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { id } = req.params;
     const { name, description, permissions, isActive } = req.body;
 
-    const role = await Role.findById(id);
+    const role = await Role.findOne({
+      _id: id,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    });
     if (!role) {
       return res.status(404).json({ message: "Role not found" });
     }
@@ -125,9 +161,12 @@ export const updateRole = async (req, res) => {
       }
     }
 
-    // Check if new name conflicts with existing role
+    // Check if new name conflicts with existing role in the same tenant
     if (name && name !== role.name) {
-      const existingRole = await Role.findOne({ name });
+      const existingRole = await Role.findOne({
+        name,
+        company_id: user.company_id, // CRITICAL: Check within tenant scope
+      });
       if (existingRole) {
         return res.status(400).json({ message: "Role with this name already exists" });
       }
@@ -185,9 +224,18 @@ export const updateRole = async (req, res) => {
 
 export const deleteRole = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { id } = req.params;
 
-    const role = await Role.findById(id);
+    const role = await Role.findOne({
+      _id: id,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    });
     if (!role) {
       return res.status(404).json({ message: "Role not found" });
     }
@@ -197,8 +245,11 @@ export const deleteRole = async (req, res) => {
       return res.status(400).json({ message: "Cannot delete system role" });
     }
 
-    // Check if role is assigned to any users
-    const usersWithRole = await User.find({ roles: id });
+    // Check if role is assigned to any users in the same tenant
+    const usersWithRole = await User.find({
+      roles: id,
+      company_id: user.company_id, // CRITICAL: Check within tenant scope
+    });
     if (usersWithRole.length > 0) {
       return res.status(400).json({
         message: "Cannot delete role. It is assigned to one or more users.",
@@ -216,14 +267,27 @@ export const deleteRole = async (req, res) => {
 // Get users with a specific role
 export const getRoleUsers = async (req, res) => {
   try {
+    // Get user's company_id for tenant scoping
+    const user = await User.findById(req.userId).select("company_id");
+    if (!user || !user.company_id) {
+      return res.status(403).json({ message: "User company not found" });
+    }
+
     const { id } = req.params;
 
-    const role = await Role.findById(id);
+    const role = await Role.findOne({
+      _id: id,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    });
     if (!role) {
       return res.status(404).json({ message: "Role not found" });
     }
 
-    const users = await User.find({ roles: id })
+    // Get users with this role in the same tenant
+    const users = await User.find({
+      roles: id,
+      company_id: user.company_id, // CRITICAL: Filter by tenant
+    })
       .select("-password")
       .populate("company_id", "name")
       .sort({ name: 1 });

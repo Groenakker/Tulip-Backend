@@ -1,6 +1,5 @@
 import User from "../models/user.models.js";
 import Role from "../models/roles.models.js";
-import Permission from "../models/permissions.models.js";
 
 /**
  * Middleware to check if user has permission for a specific module and action
@@ -23,6 +22,11 @@ export const checkPermission = (module, requiredActions) => {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // CRITICAL: Verify user belongs to tenant
+      if (!user.company_id) {
+        return res.status(403).json({ message: "Invalid tenant context" });
+      }
+
       // If user has no roles, deny access
       if (!user.roles || user.roles.length === 0) {
         return res.status(403).json({
@@ -37,9 +41,10 @@ export const checkPermission = (module, requiredActions) => {
       let hasPermission = false;
       const roleIds = user.roles.map((role) => (role._id ? role._id : role));
 
-      // Get all active roles with permissions populated
+      // Get all active roles with permissions populated, scoped to user's company
       const roles = await Role.find({
         _id: { $in: roleIds },
+        company_id: user.company_id, // CRITICAL: Filter by tenant
         isActive: true,
       }).populate("permissions.permissionId");
 
@@ -54,7 +59,7 @@ export const checkPermission = (module, requiredActions) => {
       for (const role of roles) {
         for (const rolePermission of role.permissions || []) {
           const permission = rolePermission.permissionId;
-          
+
           if (permission && permission.module === module) {
             // Check if all required actions are in allowed actions
             const hasAllActions = actionsArray.every((action) =>
@@ -104,6 +109,11 @@ export const checkAnyPermission = (permissionChecks) => {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // CRITICAL: Verify user belongs to tenant
+      if (!user.company_id) {
+        return res.status(403).json({ message: "Invalid tenant context" });
+      }
+
       if (!user.roles || user.roles.length === 0) {
         return res.status(403).json({ message: "Access denied. No permissions assigned." });
       }
@@ -111,6 +121,7 @@ export const checkAnyPermission = (permissionChecks) => {
       const roleIds = user.roles.map((role) => (role._id ? role._id : role));
       const roles = await Role.find({
         _id: { $in: roleIds },
+        company_id: user.company_id, // CRITICAL: Filter by tenant
         isActive: true,
       }).populate("permissions.permissionId");
 

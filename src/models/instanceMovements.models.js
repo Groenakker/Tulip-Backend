@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const instanceMovementSchema = new mongoose.Schema(
   {
+    company_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
     instanceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Instance",
@@ -17,11 +23,6 @@ const instanceMovementSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Warehouse",
       required: false,
-    },
-    warehouseID: {
-      type: String,
-      required: false,
-      trim: true,
     },
     receivingId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -57,10 +58,15 @@ const instanceMovementSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { 
-    timestamps: true 
+  {
+    timestamps: true
   }
 );
+
+// Compound indexes for common queries
+instanceMovementSchema.index({ company_id: 1, instanceId: 1 });
+instanceMovementSchema.index({ company_id: 1, movementType: 1 });
+instanceMovementSchema.index({ company_id: 1, movementDate: -1 });
 
 const InstanceMovement = mongoose.model("InstanceMovement", instanceMovementSchema);
 

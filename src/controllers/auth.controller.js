@@ -43,7 +43,11 @@ const normalizeRole = (role) => {
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-const ensureAdminRoleWithPermissions = async () => {
+const ensureAdminRoleWithPermissions = async (company_id) => {
+  if (!company_id) {
+    throw new Error("company_id is required to create admin role");
+  }
+
   const permissions = await Permission.find({ isActive: true }).select(
     "_id availableActions"
   );
@@ -53,7 +57,11 @@ const ensureAdminRoleWithPermissions = async () => {
     allowedActions: permission.availableActions,
   }));
 
-  let adminRole = await Role.findOne({ name: "Admin" });
+  // CRITICAL: Find admin role scoped to company
+  let adminRole = await Role.findOne({
+    name: "Admin",
+    company_id: company_id, // CRITICAL: Filter by tenant
+  });
 
   if (!adminRole) {
     adminRole = await Role.create({
@@ -61,6 +69,7 @@ const ensureAdminRoleWithPermissions = async () => {
       description: "System administrator with full access",
       permissions: fullPermissionSet,
       isSystemRole: true,
+      company_id: company_id, // CRITICAL: Set tenant scope
     });
     return adminRole;
   }
@@ -85,7 +94,7 @@ const ensureAdminRoleWithPermissions = async () => {
 
 export const sendOTP = async (req, res) => {
   const { email } = req.body;
-  
+
   try {
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
@@ -110,16 +119,16 @@ export const sendOTP = async (req, res) => {
     // Send OTP via email
     try {
       await sendOTPEmail(email, otp);
-      res.status(200).json({ 
+      res.status(200).json({
         message: "OTP sent successfully to your email",
-        email: email 
+        email: email
       });
     } catch (emailError) {
       console.error("Error sending email:", emailError);
       // Still return success to prevent email enumeration
-      res.status(200).json({ 
+      res.status(200).json({
         message: "OTP sent successfully to your email",
-        email: email 
+        email: email
       });
     }
   } catch (error) {
@@ -130,7 +139,7 @@ export const sendOTP = async (req, res) => {
 
 export const verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
-  
+
   try {
     if (!email || !otp) {
       return res.status(400).json({ message: "Email and OTP are required" });
@@ -143,7 +152,7 @@ export const verifyOTP = async (req, res) => {
 
     // Get stored OTP
     const storedOTP = await getOTP(email);
-    
+
     if (!storedOTP) {
       return res.status(400).json({ message: "OTP expired or not found. Please request a new OTP" });
     }
@@ -156,9 +165,9 @@ export const verifyOTP = async (req, res) => {
     await deleteOTP(email);
     await storeEmailVerification(email);
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "Email verified successfully",
-      email: email 
+      email: email
     });
   } catch (error) {
     console.error("Error in verifyOTP:", error.message);
@@ -168,7 +177,7 @@ export const verifyOTP = async (req, res) => {
 
 export const signup = async (req, res) => {
   const { name, companyName, email, password } = req.body;
-  
+
   try {
     // Validate required fields
     if (!name || !companyName || !email || !password) {
@@ -211,8 +220,6 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "Company already exists" });
     }
 
-    const adminRole = await ensureAdminRoleWithPermissions();
-
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -231,6 +238,9 @@ export const signup = async (req, res) => {
         ],
         { session }
       );
+
+      // CRITICAL: Create admin role scoped to the new company
+      const adminRole = await ensureAdminRoleWithPermissions(company._id);
 
       const newUser = new User({
         name: trimmedName,
@@ -280,20 +290,26 @@ export const signup = async (req, res) => {
   }
 };
 
-const resolveRoleFromInput = async (input) => {
-  if (!input) {
+const resolveRoleFromInput = async (input, company_id) => {
+  if (!input || !company_id) {
     return null;
   }
 
   if (mongoose.Types.ObjectId.isValid(input)) {
-    const roleById = await Role.findById(input);
+    const roleById = await Role.findOne({
+      _id: input,
+      company_id: company_id, // CRITICAL: Filter by tenant
+    });
     if (roleById) {
       return roleById;
     }
   }
 
   if (typeof input === "string") {
-    return Role.findOne({ name: input.trim() });
+    return Role.findOne({
+      name: input.trim(),
+      company_id: company_id, // CRITICAL: Filter by tenant
+    });
   }
 
   return null;
@@ -319,9 +335,13 @@ export const inviteUser = async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    let resolvedRole = await resolveRoleFromInput(role);
+    // CRITICAL: Resolve role scoped to inviter's company
+    let resolvedRole = await resolveRoleFromInput(role, inviter.company_id);
     if (!resolvedRole) {
-      resolvedRole = await Role.findOne({ name: "User" });
+      resolvedRole = await Role.findOne({
+        name: "User",
+        company_id: inviter.company_id, // CRITICAL: Filter by tenant
+      });
     }
 
     if (!resolvedRole) {
@@ -489,7 +509,11 @@ export const acceptInvite = async (req, res) => {
 
     let resolvedRoleId = invite.roleId;
     if (!resolvedRoleId && invite.role) {
-      const fallbackRole = await Role.findOne({ name: invite.role });
+      // CRITICAL: Find role scoped to the invite's company
+      const fallbackRole = await Role.findOne({
+        name: invite.role,
+        company_id: invite.company_id, // CRITICAL: Filter by tenant
+      });
       if (fallbackRole) {
         resolvedRoleId = fallbackRole._id;
       }
@@ -532,7 +556,7 @@ export const acceptInvite = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const {email,password} = req.body;
+  const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
 
@@ -541,11 +565,11 @@ export const login = async (req, res) => {
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
-      
+
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-    
+
     generateToken(user._id, res);
     res.status(200).json({
       _id: user._id,
@@ -557,8 +581,8 @@ export const login = async (req, res) => {
       profilePicture: user.profilePicture,
       message: "Login successful",
     });
-      
-      
+
+
   } catch (error) {
     console.error("Error comparing passwords:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -590,7 +614,7 @@ export const getMe = async (req, res) => {
     const user = await User.findById(req.userId)
       .select("-password")
       .populate("roles", "name description isActive isSystemRole");
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -630,8 +654,10 @@ export const getMyPermissions = async (req, res) => {
       role?._id ? role._id : role
     );
 
+    // CRITICAL: Filter roles by user's company
     const roles = await Role.find({
       _id: { $in: roleIds },
+      company_id: user.company_id, // CRITICAL: Filter by tenant
       isActive: true,
     }).populate("permissions.permissionId");
 
@@ -682,14 +708,14 @@ export const refreshToken = async (req, res) => {
   try {
     // verifyTokenForRefresh middleware already set req.userId
     const user = await User.findById(req.userId).select("-password");
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Generate new token
     generateToken(user._id, res);
-    
+
     res.status(200).json({
       _id: user._id,
       name: user.name,
@@ -712,28 +738,28 @@ export const changePassword = async (req, res) => {
   try {
     // Validate required fields
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ 
-        message: "Current password and new password are required" 
+      return res.status(400).json({
+        message: "Current password and new password are required"
       });
     }
 
     // Validate new password length
     if (newPassword.length < 8) {
-      return res.status(400).json({ 
-        message: "New password must be at least 8 characters long" 
+      return res.status(400).json({
+        message: "New password must be at least 8 characters long"
       });
     }
 
     // Get user with password field (needed for comparison)
     const user = await User.findById(req.userId);
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Verify current password
     const isPasswordCorrect = await bcrypt.compare(currentPassword, user.password);
-    
+
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Current password is incorrect" });
     }
@@ -741,8 +767,8 @@ export const changePassword = async (req, res) => {
     // Check if new password is different from current password
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      return res.status(400).json({ 
-        message: "New password must be different from current password" 
+      return res.status(400).json({
+        message: "New password must be different from current password"
       });
     }
 
@@ -754,8 +780,8 @@ export const changePassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    res.status(200).json({ 
-      message: "Password changed successfully" 
+    res.status(200).json({
+      message: "Password changed successfully"
     });
   } catch (error) {
     console.error("Error in changePassword:", error.message);

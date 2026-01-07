@@ -136,10 +136,10 @@ export const removePartnerTestCode = async (req, res) => {
 export const getAllPartners = async (req, res) => {
   try {
     const partners = await Bpartner.find().populate("testCodes");
-    
+
     if (!partners) {
       return res.status(404).json({ message: "No partners found" });
-      
+
     }
     res.json(partners);
 
@@ -154,11 +154,11 @@ export const getPartnerById = async (req, res) => {
   const { id } = req.params;
   try {
     const partner = await Bpartner.findById(id).populate("testCodes");
-    
+
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });
     }
-    
+
     res.json(partner);
   } catch (error) {
     res
@@ -168,9 +168,12 @@ export const getPartnerById = async (req, res) => {
 }
 
 export const createPartner = async (req, res) => {
-  const { partnerNumber,email,phone,category,name, status, address1, address2, city, state, zip, country, image } = req.body;
-  
+  const { partnerNumber, email, phone, category, name, status, address1, address2, city, state, zip, country, image, company_id } = req.body;
+
   try {
+    // Convert empty email string to undefined for sparse index compatibility
+    const normalizedEmail = email && email.trim() !== "" ? email.trim() : undefined;
+
     const newPartner = new Bpartner({
       partnerNumber,
       name,
@@ -181,12 +184,13 @@ export const createPartner = async (req, res) => {
       state,
       zip,
       country,
-      email,
+      email: normalizedEmail,
       phone,
       category,
-      image
+      image,
+      company_id
     });
-    
+
     await newPartner.save();
     res.status(201).json(newPartner);
   } catch (error) {
@@ -196,13 +200,16 @@ export const createPartner = async (req, res) => {
 
 export const updatePartner = async (req, res) => {
   const { id } = req.params;
-  const { name, status, address1, address2, city, state, zip, country, image , email , phone, category , partnerNumber } = req.body;
+  const { name, status, address1, address2, city, state, zip, country, image, email, phone, category, partnerNumber, company_id } = req.body;
 
   try {
+    // Convert empty email string to undefined for sparse index compatibility
+    const normalizedEmail = email && email.trim() !== "" ? email.trim() : undefined;
+
     const updatedPartner = await Bpartner.findByIdAndUpdate(
       id,
-      { name, status, address1, address2, city, state, zip, country, image , email , phone, category , partnerNumber },
-      { new: true }
+      { name, status, address1, address2, city, state, zip, country, image, email: normalizedEmail, phone, category, partnerNumber, company_id },
+      { new: true, runValidators: true }
     );
 
     if (!updatedPartner) {
@@ -243,35 +250,35 @@ export const getRelatedDataForPartner = async (req, res) => {
     // Fetch all related data using both bPartnerID and bPartnerCode
     const [projects, shipments, samples, testCodes, contacts] = await Promise.all([
       // Projects related to this business partner
-      Project.find({ 
+      Project.find({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
-      
+
       // Shipments related to this business partner
-      Shipping.find({ 
+      Shipping.find({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
-      
+
       // Samples related to this business partner
-      Sample.find({ 
+      Sample.find({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
-      
+
       // Test codes (these might not be directly related, but we can include them)
       // If you have a specific relationship for test codes, update this query
       Testcode.find({}),
-      
+
       // Contacts related to this business partner
-      Contact.find({ 
+      Contact.find({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
@@ -281,7 +288,7 @@ export const getRelatedDataForPartner = async (req, res) => {
 
     // Get projects for shipments to provide more context
     const projectIds = shipments.map(shipment => shipment.projectID);
-    const relatedProjects = await Project.find({ 
+    const relatedProjects = await Project.find({
       $or: [
         { _id: { $in: projectIds } },
         { projectID: { $in: projectIds } }
@@ -363,19 +370,19 @@ export const getPartnerSummary = async (req, res) => {
 
     // Get counts only for better performance
     const [projectCount, shipmentCount, sampleCount] = await Promise.all([
-      Project.countDocuments({ 
+      Project.countDocuments({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
-      Shipping.countDocuments({ 
+      Shipping.countDocuments({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
-      Sample.countDocuments({ 
+      Sample.countDocuments({
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
