@@ -15,8 +15,14 @@ export const addPartnerContact = async (req, res) => {
   }
 
   try {
-    const updatedPartner = await Bpartner.findByIdAndUpdate(
-      id,
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const updatedPartner = await Bpartner.findOneAndUpdate(
+      { _id: id, company_id: companyId },
       { $push: { contacts: { name, email, phone, jobTitle } } },
       { new: true, runValidators: true }
     );
@@ -38,7 +44,13 @@ export const deletePartnerContact = async (req, res) => {
   const { id, contactId } = req.params;
 
   try {
-    const partner = await Bpartner.findById(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
 
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });
@@ -74,8 +86,14 @@ export const addPartnerTestCode = async (req, res) => {
       return res.status(404).json({ message: "Test code not found" });
     }
 
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
     // Check if partner exists
-    const partner = await Bpartner.findById(id);
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });
     }
@@ -108,7 +126,13 @@ export const removePartnerTestCode = async (req, res) => {
   const { id, testCodeId } = req.params;
 
   try {
-    const partner = await Bpartner.findById(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
 
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });
@@ -135,7 +159,13 @@ export const removePartnerTestCode = async (req, res) => {
 
 export const getAllPartners = async (req, res) => {
   try {
-    const partners = await Bpartner.find().populate("testCodes");
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partners = await Bpartner.find({ company_id: companyId }).populate("testCodes");
 
     if (!partners) {
       return res.status(404).json({ message: "No partners found" });
@@ -153,7 +183,13 @@ export const getAllPartners = async (req, res) => {
 export const getPartnerById = async (req, res) => {
   const { id } = req.params;
   try {
-    const partner = await Bpartner.findById(id).populate("testCodes");
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId }).populate("testCodes");
 
     if (!partner) {
       return res.status(404).json({ message: "Partner not found" });
@@ -203,12 +239,23 @@ export const updatePartner = async (req, res) => {
   const { name, status, address1, address2, city, state, zip, country, image, email, phone, category, partnerNumber, company_id } = req.body;
 
   try {
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
     // Convert empty email string to undefined for sparse index compatibility
     const normalizedEmail = email && email.trim() !== "" ? email.trim() : undefined;
 
-    const updatedPartner = await Bpartner.findByIdAndUpdate(
-      id,
-      { name, status, address1, address2, city, state, zip, country, image, email: normalizedEmail, phone, category, partnerNumber, company_id },
+    const updateData = { name, status, address1, address2, city, state, zip, country, image, email: normalizedEmail, phone, category, partnerNumber };
+    if (company_id !== undefined) {
+      updateData.company_id = company_id;
+    }
+
+    const updatedPartner = await Bpartner.findOneAndUpdate(
+      { _id: id, company_id: companyId },
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -226,7 +273,13 @@ export const deletePartner = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deletedPartner = await Bpartner.findByIdAndDelete(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const deletedPartner = await Bpartner.findOneAndDelete({ _id: id, company_id: companyId });
 
     if (!deletedPartner) {
       return res.status(404).json({ message: "Partner not found" });
@@ -241,16 +294,23 @@ export const deletePartner = async (req, res) => {
 export const getRelatedDataForPartner = async (req, res) => {
   const { id } = req.params;
   try {
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
     // First, get the business partner to get their partnerNumber
-    const partner = await Bpartner.findById(id);
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
     if (!partner) {
       return res.status(404).json({ message: "Business partner not found" });
     }
 
-    // Fetch all related data using both bPartnerID and bPartnerCode
+    // Fetch all related data using both bPartnerID and bPartnerCode, filtered by company_id
     const [projects, shipments, samples, testCodes, contacts] = await Promise.all([
       // Projects related to this business partner
       Project.find({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
@@ -259,6 +319,7 @@ export const getRelatedDataForPartner = async (req, res) => {
 
       // Shipments related to this business partner
       Shipping.find({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
@@ -267,6 +328,7 @@ export const getRelatedDataForPartner = async (req, res) => {
 
       // Samples related to this business partner
       Sample.find({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
@@ -279,6 +341,7 @@ export const getRelatedDataForPartner = async (req, res) => {
 
       // Contacts related to this business partner
       Contact.find({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
@@ -289,6 +352,7 @@ export const getRelatedDataForPartner = async (req, res) => {
     // Get projects for shipments to provide more context
     const projectIds = shipments.map(shipment => shipment.projectID);
     const relatedProjects = await Project.find({
+      company_id: companyId,
       $or: [
         { _id: { $in: projectIds } },
         { projectID: { $in: projectIds } }
@@ -363,26 +427,35 @@ export const getRelatedDataForPartner = async (req, res) => {
 export const getPartnerSummary = async (req, res) => {
   const { id } = req.params;
   try {
-    const partner = await Bpartner.findById(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
     if (!partner) {
       return res.status(404).json({ message: "Business partner not found" });
     }
 
-    // Get counts only for better performance
+    // Get counts only for better performance, filtered by company_id
     const [projectCount, shipmentCount, sampleCount] = await Promise.all([
       Project.countDocuments({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
       Shipping.countDocuments({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }
         ]
       }),
       Sample.countDocuments({
+        company_id: companyId,
         $or: [
           { bPartnerID: id },
           { bPartnerCode: partner.partnerNumber }

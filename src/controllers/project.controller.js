@@ -3,11 +3,17 @@ import { uploadFileToSupabase, deleteFileFromSupabase } from "../lib/supabase.js
 
 export const getAllProjects = async (req, res) => {
   try {
-    const projects = await Project.find();
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const projects = await Project.find({ company_id: companyId });
+
     if (!projects) {
       return res.status(404).json({ message: "No projects found" });
-      
+
     }
     res.json(projects);
 
@@ -21,12 +27,18 @@ export const getAllProjects = async (req, res) => {
 export const getProjectById = async (req, res) => {
   const { id } = req.params;
   try {
-    const project = await Project.findById(id);
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const project = await Project.findOne({ _id: id, company_id: companyId });
+
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
-    
+
     res.json(project);
   } catch (error) {
     res
@@ -36,9 +48,12 @@ export const getProjectById = async (req, res) => {
 }
 
 export const createProject = async (req, res) => {
-  const { description,startDate,endDate,projectID,name, status, actDate, estDate, poNumber, poDate, commitDate, quoteNumber, salesOrderNumber , bPartnerID , bPartnerCode , contact  } = req.body;
-  
+  const { description, startDate, endDate, projectID, name, status, actDate, estDate, poNumber, poDate, commitDate, quoteNumber, salesOrderNumber, bPartnerID, bPartnerCode, contact, company_id } = req.body;
+
   try {
+    // Use company_id from authenticated user if not provided in body
+    const projectCompanyId = company_id || (req.user && req.user.company_id);
+
     const newProject = new Project({
       description,
       name,
@@ -55,9 +70,10 @@ export const createProject = async (req, res) => {
       quoteNumber,
       bPartnerID,
       bPartnerCode,
-      contact
+      contact,
+      company_id: projectCompanyId
     });
-    
+
     await newProject.save();
     res.status(201).json(newProject);
   } catch (error) {
@@ -84,12 +100,19 @@ export const updateProject = async (req, res) => {
     bPartnerID,
     bPartnerCode,
     contact,
-    image
+    image,
+    company_id
   } = req.body;
 
   try {
-    // Find project first to check if it exists and handle old image deletion
-    const project = await Project.findById(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    // Find project first to check if it exists and belongs to user's company
+    const project = await Project.findOne({ _id: id, company_id: companyId });
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
@@ -114,13 +137,18 @@ export const updateProject = async (req, res) => {
       contact
     };
 
+    // Add company_id if provided
+    if (company_id !== undefined) {
+      updateData.company_id = company_id;
+    }
+
     // Handle image update
     // Priority: 1. Multer file upload, 2. Base64 string in body, 3. Explicit null/empty
     if (req.file) {
       // Handle file uploaded via multer (multipart/form-data)
       try {
         const fileName = req.file.originalname || `project-${id}`;
-        
+
         // Upload to Supabase
         const uploadResult = await uploadFileToSupabase(
           req.file.buffer,
@@ -133,9 +161,9 @@ export const updateProject = async (req, res) => {
         const imageUrl = uploadResult.url;
 
         // Delete old image from Supabase if it exists and is not default
-        if (project.image && 
-            project.image !== "default.jpg" && 
-            project.image.startsWith('http')) {
+        if (project.image &&
+          project.image !== "default.jpg" &&
+          project.image.startsWith('http')) {
           try {
             const oldPath = project.image.split('/user_media/')[1];
             if (oldPath) {
@@ -148,9 +176,9 @@ export const updateProject = async (req, res) => {
 
         updateData.image = imageUrl;
       } catch (uploadError) {
-        return res.status(500).json({ 
-          message: "Failed to upload project image", 
-          error: uploadError.message 
+        return res.status(500).json({
+          message: "Failed to upload project image",
+          error: uploadError.message
         });
       }
     } else if (image !== undefined) {
@@ -179,9 +207,9 @@ export const updateProject = async (req, res) => {
           const imageUrl = uploadResult.url;
 
           // Delete old image from Supabase if it exists and is not default
-          if (project.image && 
-              project.image !== "default.jpg" && 
-              project.image.startsWith('http')) {
+          if (project.image &&
+            project.image !== "default.jpg" &&
+            project.image.startsWith('http')) {
             try {
               const oldPath = project.image.split('/user_media/')[1];
               if (oldPath) {
@@ -194,9 +222,9 @@ export const updateProject = async (req, res) => {
 
           updateData.image = imageUrl;
         } catch (uploadError) {
-          return res.status(500).json({ 
-            message: "Failed to upload project image", 
-            error: uploadError.message 
+          return res.status(500).json({
+            message: "Failed to upload project image",
+            error: uploadError.message
           });
         }
       } else {
@@ -223,7 +251,13 @@ export const deleteProject = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deletedProject = await Project.findByIdAndDelete(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const deletedProject = await Project.findOneAndDelete({ _id: id, company_id: companyId });
 
     if (!deletedProject) {
       return res.status(404).json({ message: "Project not found" });

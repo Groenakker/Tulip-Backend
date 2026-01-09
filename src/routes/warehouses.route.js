@@ -1,23 +1,28 @@
 import express from "express";
-import { 
-  getAllWarehouses, 
-  getWarehouseById, 
-  createWarehouse, 
-  updateWarehouse, 
-  deleteWarehouse 
+import {
+  getAllWarehouses,
+  getWarehouseById,
+  createWarehouse,
+  updateWarehouse,
+  deleteWarehouse
 } from "../controllers/warehouse.controller.js";
+import { verifyToken } from "../lib/utils.js";
+import { checkPermission } from "../middleware/permission.middleware.js";
 
 const router = express.Router();
 
-router.get("/", getAllWarehouses);
+// All routes require authentication
+router.use(verifyToken);
 
-router.get("/:id", getWarehouseById);
+router.get("/", checkPermission("Warehouses", "read"), getAllWarehouses);
 
-router.post("/", createWarehouse);
+router.get("/:id", checkPermission("Warehouses", "read"), getWarehouseById);
 
-router.put("/:id", updateWarehouse);
+router.post("/", checkPermission("Warehouses", "write"), createWarehouse);
 
-router.delete("/:id", deleteWarehouse);
+router.put("/:id", checkPermission("Warehouses", "update"), updateWarehouse);
+
+router.delete("/:id", checkPermission("Warehouses", "delete"), deleteWarehouse);
 
 export default router;
 
