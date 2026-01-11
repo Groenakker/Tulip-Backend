@@ -2,12 +2,18 @@ import Warehouse from "../models/warehouses.models.js";
 
 export const getAllWarehouses = async (req, res) => {
   try {
-    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const warehouses = await Warehouse.find({ company_id: companyId }).sort({ createdAt: -1 });
+
     if (!warehouses || warehouses.length === 0) {
       return res.status(404).json({ message: "No warehouses found" });
     }
-    
+
     res.json(warehouses);
   } catch (error) {
     res
@@ -19,12 +25,18 @@ export const getAllWarehouses = async (req, res) => {
 export const getWarehouseById = async (req, res) => {
   const { id } = req.params;
   try {
-    const warehouse = await Warehouse.findById(id);
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const warehouse = await Warehouse.findOne({ _id: id, company_id: companyId });
+
     if (!warehouse) {
       return res.status(404).json({ message: "Warehouse not found" });
     }
-    
+
     res.json(warehouse);
   } catch (error) {
     res
@@ -34,11 +46,17 @@ export const getWarehouseById = async (req, res) => {
 };
 
 export const createWarehouse = async (req, res) => {
-  const { warehouseID, address, storage, space } = req.body;
-  
+  const { warehouseID, address, storage, space, company_id } = req.body;
+
   try {
-    // Check if warehouseID already exists
-    const existingWarehouse = await Warehouse.findOne({ warehouseID });
+    // Use company_id from authenticated user if not provided in body
+    const warehouseCompanyId = company_id || (req.user && req.user.company_id);
+
+    // Check if warehouseID already exists (scoped to company)
+    const existingWarehouse = await Warehouse.findOne({
+      warehouseID,
+      company_id: warehouseCompanyId
+    });
     if (existingWarehouse) {
       return res.status(400).json({ message: "Warehouse ID already exists" });
     }
@@ -48,8 +66,9 @@ export const createWarehouse = async (req, res) => {
       address,
       storage,
       space: space || "Empty",
+      company_id: warehouseCompanyId
     });
-    
+
     await newWarehouse.save();
     res.status(201).json(newWarehouse);
   } catch (error) {
@@ -59,28 +78,49 @@ export const createWarehouse = async (req, res) => {
 
 export const updateWarehouse = async (req, res) => {
   const { id } = req.params;
-  const { warehouseID, address, storage, space } = req.body;
+  const { warehouseID, address, storage, space, company_id } = req.body;
 
   try {
-    // If warehouseID is being updated, check if it already exists
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    // Get current warehouse to check company_id for uniqueness check
+    const currentWarehouse = await Warehouse.findOne({ _id: id, company_id: companyId });
+    if (!currentWarehouse) {
+      return res.status(404).json({ message: "Warehouse not found" });
+    }
+
+    // If warehouseID is being updated, check if it already exists (scoped to company)
     if (warehouseID) {
-      const existingWarehouse = await Warehouse.findOne({ 
+      const warehouseCompanyId = company_id || currentWarehouse.company_id || (req.user && req.user.company_id);
+      const existingWarehouse = await Warehouse.findOne({
         warehouseID,
-        _id: { $ne: id } // Exclude current warehouse
+        _id: { $ne: id }, // Exclude current warehouse
+        company_id: warehouseCompanyId
       });
       if (existingWarehouse) {
         return res.status(400).json({ message: "Warehouse ID already exists" });
       }
     }
 
-    const updatedWarehouse = await Warehouse.findByIdAndUpdate(
-      id,
-      {
-        warehouseID,
-        address,
-        storage,
-        space,
-      },
+    const updateData = {
+      warehouseID,
+      address,
+      storage,
+      space,
+    };
+
+    // Add company_id if provided
+    if (company_id !== undefined) {
+      updateData.company_id = company_id;
+    }
+
+    const updatedWarehouse = await Warehouse.findOneAndUpdate(
+      { _id: id, company_id: companyId },
+      updateData,
       { new: true }
     );
 
@@ -98,7 +138,13 @@ export const deleteWarehouse = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deletedWarehouse = await Warehouse.findByIdAndDelete(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const deletedWarehouse = await Warehouse.findOneAndDelete({ _id: id, company_id: companyId });
 
     if (!deletedWarehouse) {
       return res.status(404).json({ message: "Warehouse not found" });

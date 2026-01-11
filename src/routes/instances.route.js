@@ -1,28 +1,33 @@
 import express from "express";
-import { 
-  getAllInstances, 
-  getInstanceById, 
-  createInstance, 
-  updateInstance, 
+import {
+  getAllInstances,
+  getInstanceById,
+  createInstance,
+  updateInstance,
   deleteInstance,
   getInstanceByCode,
   getInstancesBySample 
 } from "../controllers/instance.controller.js";
+import { verifyToken } from "../lib/utils.js";
+import { checkPermission } from "../middleware/permission.middleware.js";
 
 const router = express.Router();
 
-router.get("/", getAllInstances);
+// All routes require authentication
+router.use(verifyToken);
 
-router.get("/:id", getInstanceById);
+router.get("/", checkPermission("Instances", "read"), getAllInstances);
 
 router.get("/instance-code/:instanceCode", getInstanceByCode);
 
 router.get("/sample/:sampleId", getInstancesBySample);
 
-router.post("/", createInstance);
+router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 
-router.put("/:id", updateInstance);
+router.post("/", checkPermission("Instances", "write"), createInstance);
 
-router.delete("/:id", deleteInstance);
+router.put("/:id", checkPermission("Instances", "update"), updateInstance);
+
+router.delete("/:id", checkPermission("Instances", "delete"), deleteInstance);
 
 export default router;
