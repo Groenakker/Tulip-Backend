@@ -5,6 +5,7 @@ import {
   createInstance, 
   updateInstance, 
   deleteInstance,
+  getInstanceByCode,
   getInstancesBySample 
 } from "../controllers/instance.controller.js";
 
@@ -13,6 +14,8 @@ const router = express.Router();
 router.get("/", getAllInstances);
 
 router.get("/:id", getInstanceById);
+
+router.get("/instance-code/:instanceCode", getInstanceByCode);
 
 router.get("/sample/:sampleId", getInstancesBySample);
 
