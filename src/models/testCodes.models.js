@@ -2,10 +2,15 @@ import mongoose from "mongoose";
 
 const testCodeSchema = new mongoose.Schema(
     {
+        company_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+            required: true,
+            index: true,
+        },
         code: {
             type: String,
             required: true,
-            unique: true,
         },
         standard: {
             type: String,
@@ -68,6 +73,10 @@ const testCodeSchema = new mongoose.Schema(
     {
         timestamps: true,
     });
+
+// Compound indexes for tenant-scoped uniqueness
+testCodeSchema.index({ company_id: 1, code: 1 }, { unique: true });
+testCodeSchema.index({ company_id: 1, STPNumber: 1 }, { unique: true, sparse: true });
 
 const Testcode = mongoose.model("Testcode", testCodeSchema);
 

@@ -2,11 +2,17 @@ import Testcode from "../models/testCodes.models.js";
 
 export const getAllTestCodes = async (req, res) => {
   try {
-    const codes = await Testcode.find();
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const codes = await Testcode.find({ company_id: companyId });
+
     if (!codes) {
       return res.status(404).json({ message: "No partners codes" });
-      
+
     }
     res.json(codes);
 
@@ -20,12 +26,18 @@ export const getAllTestCodes = async (req, res) => {
 export const getTestCodeById = async (req, res) => {
   const { id } = req.params;
   try {
-    const code = await Testcode.findById(id);
-    
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const code = await Testcode.findOne({ _id: id, company_id: companyId });
+
     if (!code) {
       return res.status(404).json({ message: "Code not found" });
     }
-    
+
     res.json(code);
   } catch (error) {
     res
@@ -35,9 +47,15 @@ export const getTestCodeById = async (req, res) => {
 }
 
 export const createTestCode = async (req, res) => {
-  const { code,standard,descriptionShort,descriptionLong,turnAroundTime, STPNumber, numberOfExtract, minDevPerExtract, MinSAPerExtract, category, extractBased, minDevPerTest } = req.body;
-  
+  const { code, standard, descriptionShort, descriptionLong, turnAroundTime, STPNumber, numberOfExtract, minDevPerExtract, MinSAPerExtract, category, extractBased, minDevPerTest, company_id } = req.body;
+
   try {
+    // Use company_id from authenticated user if not provided in body
+    const testCodeCompanyId = company_id || (req.user && req.user.company_id);
+    if (!testCodeCompanyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
     const newCode = new Testcode({
       code,
       standard,
@@ -51,8 +69,9 @@ export const createTestCode = async (req, res) => {
       category,
       extractBased,
       minDevPerTest,
+      company_id: testCodeCompanyId,
     });
-    
+
     await newCode.save();
     res.status(201).json(newCode);
   } catch (error) {
@@ -75,25 +94,39 @@ export const updateTestCode = async (req, res) => {
     category,
     extractBased,
     minDevPerTest,
+    company_id,
   } = req.body;
 
   try {
-    const updatedCode = await Testcode.findByIdAndUpdate(
-      id,
-      {
-        code,
-        standard,
-        descriptionShort,
-        descriptionLong,
-        turnaroundTime,
-        STPNumber,
-        numberOfExtract,
-        minDevPerExtract,
-        MinSAPerExtract,
-        category,
-        extractBased,
-        minDevPerTest,
-      },
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const updateData = {
+      code,
+      standard,
+      descriptionShort,
+      descriptionLong,
+      turnaroundTime,
+      STPNumber,
+      numberOfExtract,
+      minDevPerExtract,
+      MinSAPerExtract,
+      category,
+      extractBased,
+      minDevPerTest,
+    };
+
+    // Add company_id if provided
+    if (company_id !== undefined) {
+      updateData.company_id = company_id;
+    }
+
+    const updatedCode = await Testcode.findOneAndUpdate(
+      { _id: id, company_id: companyId },
+      updateData,
       { new: true }
     );
 
@@ -111,7 +144,13 @@ export const deleteTestCode = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deletedCode = await Testcode.findByIdAndDelete(id);
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const deletedCode = await Testcode.findOneAndDelete({ _id: id, company_id: companyId });
 
     if (!deletedCode) {
       return res.status(404).json({ message: "Code not found" });
