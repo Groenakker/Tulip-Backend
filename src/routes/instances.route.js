@@ -5,7 +5,8 @@ import {
   createInstance,
   updateInstance,
   deleteInstance,
-  getInstancesBySample
+  getInstanceByCode,
+  getInstancesBySample 
 } from "../controllers/instance.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -17,7 +18,9 @@ router.use(verifyToken);
 
 router.get("/", checkPermission("Instances", "read"), getAllInstances);
 
-router.get("/:id", checkPermission("Instances", "read"), getInstanceById);
+router.get("/instance-code/:instanceCode", getInstanceByCode);
+
+router.get("/sample/:sampleId", getInstancesBySample);
 
 router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 

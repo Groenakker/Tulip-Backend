@@ -184,3 +184,30 @@ export const getInstancesBySample = async (req, res) => {
       .json({ message: "Failed to fetch instances by sample", error: error.message });
   }
 };
+
+// export const getInstanceByCode = async (req, res) => {
+//   const { instanceCode } = req.params;
+//   try {
+//     const instance = await Instance.findOne({ instanceCode }).populate('idSample', 'name description').populate('createdBy', 'name email').populate('updatedBy', 'name email');
+//     res.json(instance);
+//   } catch (error) {
+//     res.status(500).json({ message: "Failed to fetch instance by code", error: error.message });
+//   }
+// };
+export const getInstanceByCode = async (req, res) => {
+  const { instanceCode } = req.params;
+  try {
+    const instance = await Instance.findOne({ instanceCode })
+      .populate('idSample', 'name description')
+      .populate('createdBy', 'name email')
+      .populate('updatedBy', 'name email');
+
+    if (!instance) {
+      return res.status(404).json({ message: "Instance not found" });
+    }
+
+    res.json(instance);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch instance by code", error: error.message });
+  }
+};
