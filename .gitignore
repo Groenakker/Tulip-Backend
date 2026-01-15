@@ -18,7 +18,6 @@ pids/
 # Environment files (keep .env.example if you use one)
 .env
 .env.*
-!.env.example
 
 # Build / coverage
 dist/
