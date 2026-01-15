@@ -70,8 +70,8 @@ const projectSchema = new mongoose.Schema(
       required: true,
     },
     contact: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Contact",
+      type: String,
+      required: false,
     },
     commitDate: {
       type: Date,

@@ -653,14 +653,14 @@ export const getMyPermissions = async (req, res) => {
     const roleIds = user.roles.map((role) =>
       role?._id ? role._id : role
     );
-
+    console.log("roleIds", roleIds);
     // CRITICAL: Filter roles by user's company
     const roles = await Role.find({
       _id: { $in: roleIds },
       company_id: user.company_id, // CRITICAL: Filter by tenant
       isActive: true,
     }).populate("permissions.permissionId");
-
+    console.log("roles", roles);
     const hasSystemRole = roles.some((role) => role.isSystemRole);
 
     const permissionsMap = new Map();
