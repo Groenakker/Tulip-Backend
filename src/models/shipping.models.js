@@ -23,12 +23,12 @@ const shippingSchema = new mongoose.Schema(
     },
     logisticsProvider: {
       type: String,
-      required: true,
+      
       trim: true,
     },
     note: {
       type: String,
-      required: true,
+      
       trim: true,
     },
     shipmentDate: {
@@ -43,15 +43,23 @@ const shippingSchema = new mongoose.Schema(
     projectID: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
-      required: true,
+      
+    },
+    projectCode: {
+      type: String,
+      
+    },
+    projectDesc: {
+      type: String,
+      
     },
     estimatedArrivalDate: {
       type: Date,
-      required: true,
+      
     },
     estDate: {
       type: Date,
-      required: true,
+      
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -63,12 +71,12 @@ const shippingSchema = new mongoose.Schema(
     },
     bPartnerCode: {
       type: String,
-      required: true,
+      
     },
     bPartnerID: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Bpartner",
-      required: true,
+      
     },
     contactID: {
       type: mongoose.Schema.Types.ObjectId,

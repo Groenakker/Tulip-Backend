@@ -18,9 +18,9 @@ router.use(verifyToken);
 
 router.get("/", checkPermission("Instances", "read"), getAllInstances);
 
-router.get("/instance-code/:instanceCode", getInstanceByCode);
+router.get("/instance-code/:instanceCode", checkPermission("Instances", "read"), getInstanceByCode);
 
-router.get("/sample/:sampleId", getInstancesBySample);
+router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 
 router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 

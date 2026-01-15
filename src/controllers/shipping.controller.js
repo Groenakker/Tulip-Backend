@@ -1,6 +1,7 @@
 import Shipping from "../models/shipping.models.js";
 import ShippingLine from "../models/shippingLines.models.js";
 
+
 export const getAllShipping = async (req, res) => {
   try {
     // Filter by user's company_id for tenant isolation
@@ -153,9 +154,23 @@ export const updateShippingLine = async (req, res) => {
       // Keep the provided company_id
     }
 
-    const updated = await ShippingLine.findOneAndUpdate({ _id: lineId, company_id: companyId }, updateData, { new: true });
-    if (!updated) return res.status(404).json({ message: "Shipping line not found" });
-    res.json(updated);
+    // If instances are being updated, we need to save to trigger pre-save hook for quantity update
+    if (updateData.instances !== undefined) {
+      const line = await ShippingLine.findOne({ _id: lineId, company_id: companyId });
+      if (!line) return res.status(404).json({ message: "Shipping line not found" });
+      
+      // Update all fields
+      Object.assign(line, updateData);
+      
+      // Save to trigger pre-save hook which updates quantity
+      await line.save();
+      res.json(line);
+    } else {
+      // For non-instance updates, use findOneAndUpdate
+      const updated = await ShippingLine.findOneAndUpdate({ _id: lineId, company_id: companyId }, updateData, { new: true });
+      if (!updated) return res.status(404).json({ message: "Shipping line not found" });
+      res.json(updated);
+    }
   } catch (error) {
     res.status(500).json({ message: "Failed to update shipping line", error: error.message });
   }
@@ -175,5 +190,48 @@ export const deleteShippingLine = async (req, res) => {
     res.json({ message: "Shipping line deleted" });
   } catch (error) {
     res.status(500).json({ message: "Failed to delete shipping line", error: error.message });
+  }
+};
+
+export const addShippingLineInstance = async (req, res) => {
+  try {
+    const { lineId } = req.params;
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    // Fetch the document, modify it, and save to trigger pre-save hook
+    const line = await ShippingLine.findOne({ _id: lineId, company_id: companyId });
+    if (!line) return res.status(404).json({ message: "Shipping line not found" });
+
+    // Push the new instance to the array
+    line.instances.push(req.body);
+    
+    // Save the document - this will trigger the pre-save hook to update quantity
+    await line.save();
+    
+    res.json(line);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to add shipping line instance", error: error.message });
+  }
+};
+
+export const getShippingLineById = async (req, res) => {
+  try {
+    const { lineId } = req.params;
+    // Filter by user's company_id for tenant isolation
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+    console.log(lineId, companyId);
+    const line = await ShippingLine.findOne({ _id: lineId, company_id: companyId });
+    if (!line) return res.status(404).json({ message: "Shipping line not found" });
+    res.json(line);
+
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch shipping line", error: error.message });
   }
 };
