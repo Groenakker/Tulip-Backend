@@ -63,8 +63,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-app.use(cors(corsOptions));
 app.use("/health", healthRoutes);
+app.use(cors(corsOptions));
 app.use("/api/auth", authRoutes);
 app.use("/api/bpartners", bPartnerRoutes);
 app.use("/api/projects", projectRoutes);
