@@ -29,7 +29,7 @@ export const getAllSamples = async (req, res) => {
 
         // Find the next serial number for this partner on this date (scoped to company)
         const existingSamples = await Sample.find({
-          sampleCode: { $regex: `^SP-${dateStr}-${partnerSuffix}-` },
+          sampleCode: { $regex: `^SP-${partnerSuffix}-${dateStr}-` },
           company_id: companyId
         }).sort({ sampleCode: -1 });
 
@@ -40,7 +40,7 @@ export const getAllSamples = async (req, res) => {
           serialNo = lastSerial + 1;
         }
 
-        const sampleCode = `SP-${dateStr}-${partnerSuffix}-${serialNo}`;
+        const sampleCode = `SP-${partnerSuffix}-${dateStr}-${serialNo}`;
         sample.sampleCode = sampleCode;
         await sample.save();
       }
@@ -95,7 +95,7 @@ export const createSample = async (req, res) => {
 
       // Find the next serial number for this partner on this date (scoped to company)
       const existingSamples = await Sample.find({
-        sampleCode: { $regex: `^SP-${dateStr}-${partnerSuffix}-` },
+        sampleCode: { $regex: `^SP-${partnerSuffix}-${dateStr}-` },
         company_id: sampleCompanyId
       }).sort({ sampleCode: -1 });
 
@@ -106,7 +106,7 @@ export const createSample = async (req, res) => {
         serialNo = lastSerial + 1;
       }
 
-      sampleCode = `SP-${dateStr}-${partnerSuffix}-${serialNo}`;
+      sampleCode = `SP-${partnerSuffix}-${dateStr}-${serialNo}`;
     }
 
     const sample = new Sample({
@@ -114,7 +114,7 @@ export const createSample = async (req, res) => {
       sampleCode,
       description: body.description || body.sampleDescription || body.formData?.sampleDescription,
       formData: body.formData || body,
-      company_id: sampleCompanyId
+      company_id: body.company_id
     });
     await sample.save();
     res.status(201).json(sample);
