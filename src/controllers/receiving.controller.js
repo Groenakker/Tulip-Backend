@@ -34,6 +34,7 @@ export const getReceivingById = async (req, res) => {
 };
 
 export const createReceiving = async (req, res) => {
+
   try {
     const data = req.body;
     if (!data.receivingCode) {

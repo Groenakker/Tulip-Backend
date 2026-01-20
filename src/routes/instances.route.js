@@ -20,6 +20,8 @@ router.get("/", checkPermission("Instances", "read"), getAllInstances);
 
 router.get("/instance-code/:instanceCode", checkPermission("Instances", "read"), getInstanceByCode);
 
+router.get("/:id", checkPermission("Instances", "read"), getInstanceById);
+
 router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 
 router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);

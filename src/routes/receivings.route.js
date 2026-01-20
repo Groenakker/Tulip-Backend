@@ -18,16 +18,16 @@ const router = express.Router();
 // All routes require authentication
 router.use(verifyToken);
 
-router.get("/", checkPermission("Receivings", "read"), getAllReceivings);
-router.get("/:id", checkPermission("Receivings", "read"), getReceivingById);
-router.post("/", checkPermission("Receivings", "write"), createReceiving);
-router.put("/:id", checkPermission("Receivings", "update"), updateReceiving);
-router.delete("/:id", checkPermission("Receivings", "delete"), deleteReceiving);
+router.get("/", checkPermission("Receiving", "read"), getAllReceivings);
+router.get("/:id", checkPermission("Receiving", "read"), getReceivingById);
+router.post("/", checkPermission("Receiving", "write"), createReceiving);
+router.put("/:id", checkPermission("Receiving", "update"), updateReceiving);
+router.delete("/:id", checkPermission("Receiving", "delete"), deleteReceiving);
 
-router.get("/:id/lines", checkPermission("Receivings", "read"), getReceivingLines);
-router.post("/:id/lines", checkPermission("Receivings", "update"), addReceivingLine);
-router.put("/lines/:lineId", checkPermission("Receivings", "update"), updateReceivingLine);
-router.delete("/lines/:lineId", checkPermission("Receivings", "update"), deleteReceivingLine);
+router.get("/:id/lines", checkPermission("Receiving", "read"), getReceivingLines);
+router.post("/:id/lines", checkPermission("Receiving", "update"), addReceivingLine);
+router.put("/lines/:lineId", checkPermission("Receiving", "update"), updateReceivingLine);
+router.delete("/lines/:lineId", checkPermission("Receiving", "update"), deleteReceivingLine);
 
 export default router;
 

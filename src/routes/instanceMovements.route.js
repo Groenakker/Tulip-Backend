@@ -9,7 +9,8 @@ import {
   getInstanceMovementsByType,
 } from "../controllers/instanceMovements.controller.js";
 import { verifyToken } from "../lib/utils.js";
-import { checkPermission } from "../middleware/permission.middleware.js";
+import { checkPermission , checkAnyPermission} from "../middleware/permission.middleware.js";
+
 
 const router = express.Router();
 
@@ -18,13 +19,13 @@ router.use(verifyToken);
 
 router.get("/", checkPermission("InstanceMovements", "read"), getAllInstanceMovements);
 
-router.get("/instance/:instanceId", checkPermission("InstanceMovements", "read"), getInstanceMovementsByInstance);
+router.get("/instance/:instanceId", checkPermission("Instances", "read"), getInstanceMovementsByInstance);
 
 router.get("/type/:movementType", checkPermission("InstanceMovements", "read"), getInstanceMovementsByType);
 
 router.get("/:id", checkPermission("InstanceMovements", "read"), getInstanceMovementById);
 
-router.post("/", checkPermission("InstanceMovements", "write"), createInstanceMovement);
+router.post("/", checkAnyPermission([["Receiving", "write"], ["Shipping", "write"], ["Warehouse", "write"]]), createInstanceMovement);
 
 router.put("/:id", checkPermission("InstanceMovements", "update"), updateInstanceMovement);
 

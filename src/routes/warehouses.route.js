@@ -14,15 +14,15 @@ const router = express.Router();
 // All routes require authentication
 router.use(verifyToken);
 
-router.get("/", checkPermission("Warehouses", "read"), getAllWarehouses);
+router.get("/", checkPermission("Warehouse", "read"), getAllWarehouses);
 
-router.get("/:id", checkPermission("Warehouses", "read"), getWarehouseById);
+router.get("/:id", checkPermission("Warehouse", "read"), getWarehouseById);
 
-router.post("/", checkPermission("Warehouses", "write"), createWarehouse);
+router.post("/", checkPermission("Warehouse", "write"), createWarehouse);
 
-router.put("/:id", checkPermission("Warehouses", "update"), updateWarehouse);
+router.put("/:id", checkPermission("Warehouse", "update"), updateWarehouse);
 
-router.delete("/:id", checkPermission("Warehouses", "delete"), deleteWarehouse);
+router.delete("/:id", checkPermission("Warehouse", "delete"), deleteWarehouse);
 
 export default router;
 
