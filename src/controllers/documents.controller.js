@@ -1,0 +1,524 @@
+import Document from "../models/documents.models.js";
+import DocumentVersion from "../models/documentVersions.models.js";
+import DocumentReview from "../models/documentReviews.models.js";
+import { uploadFileToSupabase } from "../lib/supabase.js";
+
+const DOCUMENT_ID_PREFIX = "DOC";
+const DOCUMENT_ID_YEAR_LEN = 4;
+const DOCUMENT_ID_SEQ_LEN = 3;
+
+async function generateDocumentID(companyId) {
+  const year = new Date().getFullYear().toString();
+  const pattern = new RegExp(`^${DOCUMENT_ID_PREFIX}-${year}-(\\d+)$`);
+  const last = await Document.find({
+    company_id: companyId,
+    documentID: pattern,
+  })
+    .sort({ documentID: -1 })
+    .limit(1)
+    .select("documentID")
+    .lean();
+
+  let seq = 1;
+  if (last.length > 0 && last[0].documentID) {
+    const match = last[0].documentID.match(pattern);
+    if (match) seq = parseInt(match[1], 10) + 1;
+  }
+  const seqStr = seq.toString().padStart(DOCUMENT_ID_SEQ_LEN, "0");
+  return `${DOCUMENT_ID_PREFIX}-${year}-${seqStr}`;
+}
+
+export const getAllDocuments = async (req, res) => {
+  try {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const documents = await Document.find({ company_id: companyId }).sort({
+      createdAt: -1,
+    });
+
+    const list = documents.map((doc) => ({
+      _id: doc._id,
+      documentID: doc.documentID,
+      title: doc.name,
+      name: doc.name,
+      category: doc.category,
+      status: doc.status,
+      version: doc.currentVersion,
+      currentVersion: doc.currentVersion,
+    }));
+
+    res.json(list);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch documents", error: error.message });
+  }
+};
+
+export const getDocumentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const include = (req.query.include || "").toLowerCase();
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const result = document.toObject();
+
+    if (include.includes("versions")) {
+      const versions = await DocumentVersion.find({
+        documentId: id,
+        company_id: companyId,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      result.versions = versions.map((v) => ({
+        id: v._id,
+        version: v.version,
+        date: v.date,
+        author: v.author,
+        changes: v.changes,
+        status: v.status,
+        fileName: v.fileName,
+        stakeholders: v.stakeholders || [],
+      }));
+    }
+
+    if (include.includes("reviews")) {
+      const reviews = await DocumentReview.find({
+        documentId: id,
+        company_id: companyId,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      result.reviews = reviews.map((r) => ({
+        id: r._id,
+        reviewer: r.reviewer,
+        date: r.date,
+        comment: r.comment,
+        status: r.status,
+      }));
+    }
+
+    res.json(result);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch document", error: error.message });
+  }
+};
+
+export const createDocument = async (req, res) => {
+  try {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    // Mandatory: file, documentID, name, category
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: "Document file is required" });
+    }
+
+    const body = req.body || {};
+    const name = body.name && body.name.trim();
+    const category = body.category && body.category.trim();
+    if (!name) {
+      return res.status(400).json({ message: "Document name is required" });
+    }
+    if (!category) {
+      return res.status(400).json({ message: "Document category is required" });
+    }
+
+    let documentID = body.documentID && body.documentID.trim();
+    if (!documentID) {
+      documentID = await generateDocumentID(companyId);
+    } else {
+      const exists = await Document.findOne({
+        company_id: companyId,
+        documentID,
+      });
+      if (exists) {
+        return res
+          .status(400)
+          .json({ message: "documentID already exists for this tenant" });
+      }
+    }
+
+    // Upload file to Supabase (user_media/documents/{companyId})
+    const fileName = req.file.originalname || `document-${documentID}`;
+    let fileUrl = null;
+    let savedFileName = fileName;
+    try {
+      const uploadResult = await uploadFileToSupabase(
+        req.file.buffer,
+        fileName,
+        "user_media",
+        `documents/${companyId}`,
+        req.file.mimetype
+      );
+      fileUrl = uploadResult.url;
+    } catch (uploadError) {
+      return res.status(500).json({
+        message: "Failed to upload document file",
+        error: uploadError.message,
+      });
+    }
+
+    // Optional: description, stakeholders (parsed from JSON string if form-data)
+    const description = body.description && body.description.trim() ? body.description.trim() : undefined;
+    let stakeholders = [];
+    if (body.stakeholders) {
+      try {
+        const parsed = typeof body.stakeholders === "string" ? JSON.parse(body.stakeholders) : body.stakeholders;
+        stakeholders = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        stakeholders = [];
+      }
+    }
+
+    const doc = new Document({
+      documentID,
+      name,
+      category,
+      description,
+      status: "Creation",
+      currentVersion: "v1.0",
+      fileName: savedFileName,
+      fileUrl,
+      company_id: companyId,
+      createdBy: req.user?._id,
+      updatedBy: req.user?._id,
+    });
+    await doc.save();
+
+    // Create first version with file and optional stakeholders
+    const version = new DocumentVersion({
+      documentId: doc._id,
+      company_id: companyId,
+      version: "v1.0",
+      date: new Date(),
+      author: req.user?.name,
+      authorId: req.user?._id,
+      status: "Creation",
+      fileName: savedFileName,
+      fileUrl,
+      stakeholders: stakeholders.map((s) => ({
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        status: s.status || "Pending",
+        avatar: s.avatar,
+      })),
+    });
+    await version.save();
+
+    res.status(201).json(doc);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to create document", error: error.message });
+  }
+};
+
+export const updateDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const updateData = { ...req.body };
+    if (req.body.company_id !== undefined) {
+      updateData.company_id = req.body.company_id;
+    }
+    updateData.updatedBy = req.user?._id;
+
+    const updated = await Document.findOneAndUpdate(
+      { _id: id, company_id: companyId },
+      updateData,
+      { new: true }
+    );
+    if (!updated)
+      return res.status(404).json({ message: "Document not found" });
+    res.json(updated);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to update document", error: error.message });
+  }
+};
+
+export const deleteDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const deleted = await Document.findOneAndDelete({
+      _id: id,
+      company_id: companyId,
+    });
+    if (!deleted)
+      return res.status(404).json({ message: "Document not found" });
+
+    await DocumentVersion.deleteMany({ documentId: id, company_id: companyId });
+    await DocumentReview.deleteMany({ documentId: id, company_id: companyId });
+
+    res.json({ message: "Document deleted" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to delete document", error: error.message });
+  }
+};
+
+// ----- Versions (nested under document) -----
+
+export const getDocumentVersions = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const versions = await DocumentVersion.find({
+      documentId: id,
+      company_id: companyId,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const list = versions.map((v) => ({
+      id: v._id,
+      version: v.version,
+      date: v.date,
+      author: v.author,
+      changes: v.changes,
+      status: v.status,
+      fileName: v.fileName,
+      stakeholders: v.stakeholders || [],
+    }));
+
+    res.json(list);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch versions", error: error.message });
+  }
+};
+
+export const addDocumentVersion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const body = req.body || {};
+    const versionNum =
+      body.version ||
+      `v${(await DocumentVersion.countDocuments({ documentId: id, company_id: companyId })) + 1}.0`;
+
+    const version = new DocumentVersion({
+      documentId: id,
+      company_id: companyId,
+      version: versionNum,
+      date: body.date ? new Date(body.date) : new Date(),
+      author: body.author || req.user?.name,
+      authorId: req.user?._id,
+      changes: body.changes,
+      status: body.status || "Creation",
+      fileName: body.fileName,
+      fileUrl: body.fileUrl,
+      stakeholders: body.stakeholders || [],
+    });
+    await version.save();
+
+    const result = version.toObject();
+    res.status(201).json({
+      id: result._id,
+      version: result.version,
+      date: result.date,
+      author: result.author,
+      changes: result.changes,
+      status: result.status,
+      fileName: result.fileName,
+      stakeholders: result.stakeholders || [],
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to add version", error: error.message });
+  }
+};
+
+export const updateDocumentVersion = async (req, res) => {
+  try {
+    const { id, versionId } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const updateData = { ...req.body };
+    const updated = await DocumentVersion.findOneAndUpdate(
+      { _id: versionId, documentId: id, company_id: companyId },
+      updateData,
+      { new: true }
+    );
+    if (!updated)
+      return res.status(404).json({ message: "Version not found" });
+
+    const result = updated.toObject();
+    res.json({
+      id: result._id,
+      version: result.version,
+      date: result.date,
+      author: result.author,
+      changes: result.changes,
+      status: result.status,
+      fileName: result.fileName,
+      stakeholders: result.stakeholders || [],
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to update version", error: error.message });
+  }
+};
+
+export const deleteDocumentVersion = async (req, res) => {
+  try {
+    const { id, versionId } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const version = await DocumentVersion.findOne({
+      _id: versionId,
+      documentId: id,
+      company_id: companyId,
+    });
+    if (!version)
+      return res.status(404).json({ message: "Version not found" });
+
+    const hasApproved = (version.stakeholders || []).some(
+      (s) => (s.status || "").toLowerCase() === "approved"
+    );
+    if (hasApproved) {
+      return res.status(400).json({
+        message: "Cannot delete version with approved stakeholders",
+      });
+    }
+
+    await DocumentVersion.findByIdAndDelete(versionId);
+    res.json({ message: "Version deleted" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to delete version", error: error.message });
+  }
+};
+
+// ----- Reviews (nested under document) -----
+
+export const getDocumentReviews = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const reviews = await DocumentReview.find({
+      documentId: id,
+      company_id: companyId,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const list = reviews.map((r) => ({
+      id: r._id,
+      reviewer: r.reviewer,
+      date: r.date,
+      comment: r.comment,
+      status: r.status,
+    }));
+
+    res.json(list);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch reviews", error: error.message });
+  }
+};
+
+export const addDocumentReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const body = req.body || {};
+    const review = new DocumentReview({
+      documentId: id,
+      company_id: companyId,
+      reviewer: body.reviewer || req.user?.name,
+      reviewerId: req.user?._id,
+      date: body.date ? new Date(body.date) : new Date(),
+      comment: body.comment,
+      status: body.status || "Pending",
+    });
+    await review.save();
+
+    const result = review.toObject();
+    res.status(201).json({
+      id: result._id,
+      reviewer: result.reviewer,
+      date: result.date,
+      comment: result.comment,
+      status: result.status,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to add review", error: error.message });
+  }
+};

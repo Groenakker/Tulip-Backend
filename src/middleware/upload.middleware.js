@@ -42,3 +42,23 @@ export const uploadProfilePicture = upload.single('profilePicture');
 // Middleware for single file upload (project image)
 export const uploadProjectImage = upload.single('image');
 
+// Document file filter (PDF, DOC, DOCX)
+const documentFileFilter = (req, file, cb) => {
+  const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF, DOC and DOCX files are allowed'), false);
+  }
+};
+
+// Multer for document uploads (larger limit: 10MB)
+const uploadDocument = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: documentFileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
+// Middleware for single document file upload
+export const uploadDocumentFile = uploadDocument.single('file');
+
