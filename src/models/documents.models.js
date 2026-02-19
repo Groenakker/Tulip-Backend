@@ -24,6 +24,9 @@ const documentSchema = new mongoose.Schema(
     currentVersion: { type: String, trim: true, default: "v1.0" },
     fileName: { type: String, trim: true },
     fileUrl: { type: String, trim: true },
+    files: [
+      { fileName: { type: String, trim: true }, fileUrl: { type: String, trim: true } },
+    ],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },

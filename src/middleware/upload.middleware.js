@@ -59,6 +59,9 @@ const uploadDocument = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-// Middleware for single document file upload
-export const uploadDocumentFile = uploadDocument.single('file');
+// Max files per create request
+const MAX_DOCUMENT_FILES = 20;
+
+// Middleware for single or multiple document file upload
+export const uploadDocumentFile = uploadDocument.array('file', MAX_DOCUMENT_FILES);
 

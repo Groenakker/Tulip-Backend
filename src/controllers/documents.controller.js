@@ -88,6 +88,8 @@ export const getDocumentById = async (req, res) => {
         changes: v.changes,
         status: v.status,
         fileName: v.fileName,
+        fileUrl: v.fileUrl,
+        files: v.files || [],
         stakeholders: v.stakeholders || [],
       }));
     }
@@ -123,9 +125,12 @@ export const createDocument = async (req, res) => {
       return res.status(403).json({ message: "Invalid tenant context" });
     }
 
-    // Mandatory: file, documentID, name, category
-    if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ message: "Document file is required" });
+    // Normalize: multer.array('file') sets req.files (array)
+    const uploadedFiles = Array.isArray(req.files) && req.files.length > 0
+      ? req.files.filter((f) => f && f.buffer)
+      : [];
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({ message: "At least one document file is required" });
     }
 
     const body = req.body || {};
@@ -153,38 +158,45 @@ export const createDocument = async (req, res) => {
       }
     }
 
-    // Upload file to Supabase (user_media/documents/{companyId})
-    const fileName = req.file.originalname || `document-${documentID}`;
-    let fileUrl = null;
-    let savedFileName = fileName;
-    try {
-      const uploadResult = await uploadFileToSupabase(
-        req.file.buffer,
-        fileName,
-        "user_media",
-        `documents/${companyId}`,
-        req.file.mimetype
-      );
-      fileUrl = uploadResult.url;
-    } catch (uploadError) {
-      return res.status(500).json({
-        message: "Failed to upload document file",
-        error: uploadError.message,
-      });
-    }
-
-    // Optional: description, stakeholders (parsed from JSON string if form-data)
-    const description = body.description && body.description.trim() ? body.description.trim() : undefined;
+    const description = body.description && body.description.trim()
+      ? body.description.trim()
+      : undefined;
     let stakeholders = [];
     if (body.stakeholders) {
       try {
-        const parsed = typeof body.stakeholders === "string" ? JSON.parse(body.stakeholders) : body.stakeholders;
+        const parsed = typeof body.stakeholders === "string"
+          ? JSON.parse(body.stakeholders)
+          : body.stakeholders;
         stakeholders = Array.isArray(parsed) ? parsed : [];
       } catch {
         stakeholders = [];
       }
     }
 
+    // Upload all files and build files array
+    const files = [];
+    for (const file of uploadedFiles) {
+      const fileName = file.originalname || `document-${documentID}-${files.length}`;
+      let fileUrl = null;
+      try {
+        const uploadResult = await uploadFileToSupabase(
+          file.buffer,
+          fileName,
+          "user_media",
+          `documents/${companyId}`,
+          file.mimetype
+        );
+        fileUrl = uploadResult.url;
+      } catch (uploadError) {
+        return res.status(500).json({
+          message: "Failed to upload document file",
+          error: uploadError.message,
+        });
+      }
+      files.push({ fileName, fileUrl });
+    }
+
+    const firstFile = files[0];
     const doc = new Document({
       documentID,
       name,
@@ -192,15 +204,15 @@ export const createDocument = async (req, res) => {
       description,
       status: "Creation",
       currentVersion: "v1.0",
-      fileName: savedFileName,
-      fileUrl,
+      fileName: firstFile.fileName,
+      fileUrl: firstFile.fileUrl,
+      files,
       company_id: companyId,
       createdBy: req.user?._id,
       updatedBy: req.user?._id,
     });
     await doc.save();
 
-    // Create first version with file and optional stakeholders
     const version = new DocumentVersion({
       documentId: doc._id,
       company_id: companyId,
@@ -209,8 +221,9 @@ export const createDocument = async (req, res) => {
       author: req.user?.name,
       authorId: req.user?._id,
       status: "Creation",
-      fileName: savedFileName,
-      fileUrl,
+      fileName: firstFile.fileName,
+      fileUrl: firstFile.fileUrl,
+      files,
       stakeholders: stakeholders.map((s) => ({
         name: s.name,
         email: s.email,
@@ -221,7 +234,7 @@ export const createDocument = async (req, res) => {
     });
     await version.save();
 
-    res.status(201).json(doc);
+    return res.status(201).json(doc);
   } catch (error) {
     res
       .status(500)

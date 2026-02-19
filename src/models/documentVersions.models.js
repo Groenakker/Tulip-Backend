@@ -37,6 +37,9 @@ const documentVersionSchema = new mongoose.Schema(
     },
     fileName: { type: String, trim: true },
     fileUrl: { type: String, trim: true },
+    files: [
+      { fileName: { type: String, trim: true }, fileUrl: { type: String, trim: true } },
+    ],
     stakeholders: [stakeholderSchema],
   },
   { timestamps: true }
