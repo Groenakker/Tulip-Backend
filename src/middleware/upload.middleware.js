@@ -65,3 +65,6 @@ const MAX_DOCUMENT_FILES = 20;
 // Middleware for single or multiple document file upload
 export const uploadDocumentFile = uploadDocument.array('file', MAX_DOCUMENT_FILES);
 
+// Single file for add version
+export const uploadSingleDocumentFile = uploadDocument.single('file');
+

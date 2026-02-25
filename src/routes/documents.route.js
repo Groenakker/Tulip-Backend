@@ -14,7 +14,7 @@ import {
 } from "../controllers/documents.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
-import { uploadDocumentFile, handleMulterError } from "../middleware/upload.middleware.js";
+import { uploadDocumentFile, uploadSingleDocumentFile, handleMulterError } from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
@@ -40,6 +40,8 @@ router.get(
 router.post(
   "/:id/versions",
   checkPermission("Documents", "update"),
+  uploadSingleDocumentFile,
+  handleMulterError,
   addDocumentVersion
 );
 router.put(

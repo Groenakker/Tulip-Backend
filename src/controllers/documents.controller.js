@@ -401,6 +401,42 @@ export const addDocumentVersion = async (req, res) => {
       body.version ||
       `v${(await DocumentVersion.countDocuments({ documentId: id, company_id: companyId })) + 1}.0`;
 
+    let fileName = body.fileName;
+    let fileUrl = body.fileUrl;
+    const files = [];
+
+    if (req.file && req.file.buffer) {
+      try {
+        const uploadResult = await uploadFileToSupabase(
+          req.file.buffer,
+          req.file.originalname || `version-${versionNum}`,
+          "user_media",
+          `documents/${companyId}`,
+          req.file.mimetype
+        );
+        fileUrl = uploadResult.url;
+        fileName = req.file.originalname || fileName;
+        files.push({ fileName, fileUrl });
+      } catch (uploadError) {
+        return res.status(500).json({
+          message: "Failed to upload version file",
+          error: uploadError.message,
+        });
+      }
+    }
+
+    let stakeholders = [];
+    if (body.stakeholders != null) {
+      try {
+        const parsed = typeof body.stakeholders === "string"
+          ? JSON.parse(body.stakeholders)
+          : body.stakeholders;
+        stakeholders = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        stakeholders = [];
+      }
+    }
+
     const version = new DocumentVersion({
       documentId: id,
       company_id: companyId,
@@ -410,11 +446,60 @@ export const addDocumentVersion = async (req, res) => {
       authorId: req.user?._id,
       changes: body.changes,
       status: body.status || "Creation",
-      fileName: body.fileName,
-      fileUrl: body.fileUrl,
-      stakeholders: body.stakeholders || [],
+      fileName: fileName || body.fileName,
+      fileUrl: fileUrl || body.fileUrl,
+      files: files.length ? files : [],
+      stakeholders: stakeholders.map((s) => ({
+        name: s.name,
+        email: s.email,
+        role: s.role,
+        status: s.status || "Pending",
+        avatar: s.avatar,
+      })),
     });
     await version.save();
+
+    // Notify stakeholders with email (same as create document: team → document link, external → approval token)
+    const addedByName = req.user?.name || req.user?.email;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
+    for (const s of version.stakeholders || []) {
+      const email = (s.email || "").trim().toLowerCase();
+      if (!email) continue;
+
+      const isTeamMember = await User.findOne({
+        email,
+        company_id: companyId,
+      })
+        .select("_id")
+        .lean();
+
+      if (isTeamMember) {
+        const documentLink = `${frontendBaseUrl}/DocumentManagement/DocumentDetails/${id}`;
+        sendDocumentStakeholderEmail({
+          to: s.email?.trim() || email,
+          documentName: document.name,
+          documentID: document.documentID,
+          role: s.role || "Stakeholder",
+          addedByName,
+          documentLink,
+        }).catch((err) => {
+          console.error(`[documents] Failed to send team member email (version) to ${email}:`, err.message);
+        });
+      } else {
+        const token = createStakeholderApprovalToken(version._id, s._id);
+        const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+        sendDocumentStakeholderEmail({
+          to: s.email?.trim() || email,
+          documentName: document.name,
+          documentID: document.documentID,
+          role: s.role || "Stakeholder",
+          addedByName,
+          approvalLink,
+        }).catch((err) => {
+          console.error(`[documents] Failed to send stakeholder email (version) to ${email}:`, err.message);
+        });
+      }
+    }
 
     const result = version.toObject();
     res.status(201).json({
@@ -425,6 +510,8 @@ export const addDocumentVersion = async (req, res) => {
       changes: result.changes,
       status: result.status,
       fileName: result.fileName,
+      fileUrl: result.fileUrl,
+      files: result.files || [],
       stakeholders: result.stakeholders || [],
     });
   } catch (error) {
