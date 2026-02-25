@@ -131,7 +131,9 @@ export const sendInviteEmail = async ({ to, inviteLink, inviterName, companyName
 
 /**
  * Send email to a stakeholder when they are added to a new document.
- * @param {{ to: string, documentName: string, documentID: string, role: string, addedByName?: string, approvalLink?: string }} params
+ * - External (no Tulip account): pass approvalLink (token URL) for no-login approval.
+ * - Team member (has account): pass documentLink (app URL) to open document after login.
+ * @param {{ to: string, documentName: string, documentID: string, role: string, addedByName?: string, approvalLink?: string, documentLink?: string }} params
  */
 export const sendDocumentStakeholderEmail = async ({
   to,
@@ -140,6 +142,7 @@ export const sendDocumentStakeholderEmail = async ({
   role,
   addedByName,
   approvalLink,
+  documentLink,
 }) => {
   const prettyRole =
     typeof role === "string" && role.length
@@ -148,8 +151,11 @@ export const sendDocumentStakeholderEmail = async ({
   const addedBy = addedByName && addedByName.trim() ? addedByName.trim() : "A teammate";
 
   const hasApprovalLink = approvalLink && approvalLink.trim().length > 0;
-  const ctaBlock = hasApprovalLink
-    ? `
+  const hasDocumentLink = documentLink && documentLink.trim().length > 0;
+
+  let ctaBlock;
+  if (hasApprovalLink) {
+    ctaBlock = `
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
         Use the button below to open the document and submit your review or approval. This link is unique to you and expires in 30 days.
       </p>
@@ -162,12 +168,29 @@ export const sendDocumentStakeholderEmail = async ({
       <p style="margin:8px 0 0;font-size:14px;word-break:break-all;">
         <a href="${approvalLink}" style="color:#456FB6;text-decoration:none;">${approvalLink}</a>
       </p>
-    `
-    : `
+    `;
+  } else if (hasDocumentLink) {
+    ctaBlock = `
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
+        Log in to Tulip and use the button below to open the document and complete your review or approval.
+      </p>
+      <a href="${documentLink}" style="display:inline-block;background-color:#456FB6;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:16px;letter-spacing:0.3px;">
+        View Document in Tulip
+      </a>
+      <p style="margin:24px 0 0;font-size:14px;color:#6B7280;">
+        Having trouble with the button? Paste this link into your browser after logging in:
+      </p>
+      <p style="margin:8px 0 0;font-size:14px;word-break:break-all;">
+        <a href="${documentLink}" style="color:#456FB6;text-decoration:none;">${documentLink}</a>
+      </p>
+    `;
+  } else {
+    ctaBlock = `
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
         Log in to Tulip to view the document and complete your review or approval.
       </p>
     `;
+  }
 
   await transporter.sendMail({
     from: `"Tulip" <${process.env.EMAIL_USER}>`,

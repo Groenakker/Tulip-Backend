@@ -1,6 +1,7 @@
 import Document from "../models/documents.models.js";
 import DocumentVersion from "../models/documentVersions.models.js";
 import DocumentReview from "../models/documentReviews.models.js";
+import User from "../models/user.models.js";
 import { uploadFileToSupabase } from "../lib/supabase.js";
 import { sendDocumentStakeholderEmail } from "../utils/mailer.js";
 import { createStakeholderApprovalToken } from "../utils/stakeholderApprovalToken.js";
@@ -240,20 +241,44 @@ export const createDocument = async (req, res) => {
     const addedByName = req.user?.name || req.user?.email;
     const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
     for (const s of version.stakeholders || []) {
-      const email = (s.email || "").trim();
+      const email = (s.email || "").trim().toLowerCase();
       if (!email) continue;
-      const token = createStakeholderApprovalToken(version._id, s._id);
-      const approvalLink = `${frontendBaseUrl}/approval/${token}`;
-      sendDocumentStakeholderEmail({
-        to: email,
-        documentName: name,
-        documentID,
-        role: s.role || "Stakeholder",
-        addedByName,
-        approvalLink,
-      }).catch((err) => {
-        console.error(`[documents] Failed to send stakeholder email to ${email}:`, err.message);
-      });
+
+      const isTeamMember = await User.findOne({
+        email,
+        company_id: companyId,
+      })
+        .select("_id")
+        .lean();
+
+      if (isTeamMember) {
+        // Team member: link to document in app (they log in and open the document)
+        const documentLink = `${frontendBaseUrl}/DocumentManagement/DocumentDetails/${doc._id}`;
+        sendDocumentStakeholderEmail({
+          to: s.email?.trim() || email,
+          documentName: name,
+          documentID,
+          role: s.role || "Stakeholder",
+          addedByName,
+          documentLink,
+        }).catch((err) => {
+          console.error(`[documents] Failed to send team member email to ${email}:`, err.message);
+        });
+      } else {
+        // External stakeholder: token-based approval link (no login required)
+        const token = createStakeholderApprovalToken(version._id, s._id);
+        const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+        sendDocumentStakeholderEmail({
+          to: s.email?.trim() || email,
+          documentName: name,
+          documentID,
+          role: s.role || "Stakeholder",
+          addedByName,
+          approvalLink,
+        }).catch((err) => {
+          console.error(`[documents] Failed to send stakeholder email to ${email}:`, err.message);
+        });
+      }
     }
 
     return res.status(201).json(doc);
