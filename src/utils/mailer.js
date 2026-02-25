@@ -128,3 +128,87 @@ export const sendInviteEmail = async ({ to, inviteLink, inviterName, companyName
     `,
   });
 };
+
+/**
+ * Send email to a stakeholder when they are added to a new document.
+ * @param {{ to: string, documentName: string, documentID: string, role: string, addedByName?: string, approvalLink?: string }} params
+ */
+export const sendDocumentStakeholderEmail = async ({
+  to,
+  documentName,
+  documentID,
+  role,
+  addedByName,
+  approvalLink,
+}) => {
+  const prettyRole =
+    typeof role === "string" && role.length
+      ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()
+      : "Stakeholder";
+  const addedBy = addedByName && addedByName.trim() ? addedByName.trim() : "A teammate";
+
+  const hasApprovalLink = approvalLink && approvalLink.trim().length > 0;
+  const ctaBlock = hasApprovalLink
+    ? `
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
+        Use the button below to open the document and submit your review or approval. This link is unique to you and expires in 30 days.
+      </p>
+      <a href="${approvalLink}" style="display:inline-block;background-color:#456FB6;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:16px;letter-spacing:0.3px;">
+        Review &amp; Approve Document
+      </a>
+      <p style="margin:24px 0 0;font-size:14px;color:#6B7280;">
+        Having trouble with the button? Paste this link into your browser:
+      </p>
+      <p style="margin:8px 0 0;font-size:14px;word-break:break-all;">
+        <a href="${approvalLink}" style="color:#456FB6;text-decoration:none;">${approvalLink}</a>
+      </p>
+    `
+    : `
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
+        Log in to Tulip to view the document and complete your review or approval.
+      </p>
+    `;
+
+  await transporter.sendMail({
+    from: `"Tulip" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: `You've been added as ${prettyRole} to document: ${documentName || documentID}`,
+    html: `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EFF3F4;padding:32px 16px;font-family:'Poppins',Arial,sans-serif;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background-color:#ffffff;border-radius:16px;padding:32px 28px;box-shadow:0 20px 40px rgba(69,111,182,0.12);">
+              <tr>
+                <td align="center" style="padding-bottom:24px;">
+                  <div style="display:inline-block;padding:10px 18px;border-radius:999px;background-color:rgba(69,111,182,0.1);color:#456FB6;font-weight:600;font-size:14px;letter-spacing:0.4px;text-transform:uppercase;">
+                    Document Stakeholder
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="text-align:center;">
+                  <h1 style="margin:0 0 16px;font-size:26px;line-height:1.3;color:#1F2937;">You've been added to a document</h1>
+                  <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#4B5563;">
+                    <strong>${addedBy}</strong> has added you as a <strong>${prettyRole}</strong> to the following document.
+                  </p>
+                  <div style="display:inline-block;padding:18px 24px;border-radius:14px;background-color:#F4F7FF;margin:12px 0 24px;text-align:left;">
+                    <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Document</p>
+                    <p style="margin:0;font-size:18px;font-weight:600;color:#1F2937;">${documentName || "Untitled"}</p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#9CA3AF;">ID: ${documentID || "—"}</p>
+                  </div>
+                  ${ctaBlock}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top:24px;text-align:center;border-top:1px solid #E5E7EB;">
+                  <p style="margin:0;font-size:14px;color:#6B7280;">Thank you,</p>
+                  <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1F2937;">The Tulip Team</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    `,
+  });
+};

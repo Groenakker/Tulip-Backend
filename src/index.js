@@ -28,6 +28,7 @@ import permissionsRoutes from "./routes/permissions.route.js";
 import rolesRoutes from "./routes/roles.route.js";
 import usersRoutes from "./routes/users.route.js";
 import healthRoutes from "./routes/health.route.js";
+import stakeholderApprovalRoutes from "./routes/stakeholderApproval.route.js";
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use("/api/warehouses", warehousesRoutes);
 app.use("/api/permissions", permissionsRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/stakeholder-approval", stakeholderApprovalRoutes);
 
 app.listen(PORT, () => {
   console.log("server is running on port " + PORT);

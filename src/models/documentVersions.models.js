@@ -7,6 +7,10 @@ const stakeholderSchema = new mongoose.Schema(
     role: { type: String, trim: true },
     status: { type: String, trim: true },
     avatar: { type: String, trim: true },
+    signature: { type: String },
+    approvedAt: { type: Date },
+    rejectedAt: { type: Date },
+    rejectionReason: { type: String },
   },
   { _id: true }
 );
