@@ -19,6 +19,7 @@ import testCodesRoutes from "./routes/testCodes.route.js";
 import receivingRoutes from "./routes/receivings.route.js";
 import shippingRoutes from "./routes/shipping.route.js";
 import samplesRoutes from "./routes/samples.route.js";
+import documentsRoutes from "./routes/documents.route.js";
 import instanceRoutes from "./routes/instances.route.js";
 import instanceMovementsRoutes from "./routes/instanceMovements.route.js";
 import companyRoutes from "./routes/companies.route.js";
@@ -27,6 +28,7 @@ import permissionsRoutes from "./routes/permissions.route.js";
 import rolesRoutes from "./routes/roles.route.js";
 import usersRoutes from "./routes/users.route.js";
 import healthRoutes from "./routes/health.route.js";
+import stakeholderApprovalRoutes from "./routes/stakeholderApproval.route.js";
 
 const app = express();
 
@@ -72,6 +74,7 @@ app.use("/api/testcodes", testCodesRoutes);
 app.use("/api/receivings", receivingRoutes);
 app.use("/api/shipping", shippingRoutes);
 app.use("/api/samples", samplesRoutes);
+app.use("/api/documents", documentsRoutes);
 app.use("/api/instances", instanceRoutes);
 app.use("/api/instance-movements", instanceMovementsRoutes);
 app.use("/api/companies", companyRoutes);
@@ -79,6 +82,7 @@ app.use("/api/warehouses", warehousesRoutes);
 app.use("/api/permissions", permissionsRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/stakeholder-approval", stakeholderApprovalRoutes);
 
 app.listen(PORT, () => {
   console.log("server is running on port " + PORT);

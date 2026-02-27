@@ -53,15 +53,24 @@ export const uploadFileToSupabase = async (file, fileName, bucket = 'user_media'
       fileBuffer = file;
     }
 
-    // Determine content type
-    let contentType = detectedMimeType || `image/${fileExtension}`;
-    // Normalize common image types
-    if (contentType === 'image/jpeg') contentType = 'image/jpeg';
-    else if (contentType === 'image/png') contentType = 'image/png';
-    else if (contentType === 'image/gif') contentType = 'image/gif';
-    else if (contentType === 'image/webp') contentType = 'image/webp';
-    else if (!contentType.startsWith('image/')) {
-      // Fallback to jpeg if unknown
+    // Determine content type (support images and documents)
+    const documentMimeTypes = {
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    let contentType = detectedMimeType
+      || documentMimeTypes[fileExtension.toLowerCase()]
+      || `image/${fileExtension}`;
+    if (contentType === 'image/jpeg') {
+      contentType = 'image/jpeg';
+    } else if (contentType === 'image/png') {
+      contentType = 'image/png';
+    } else if (contentType === 'image/gif') {
+      contentType = 'image/gif';
+    } else if (contentType === 'image/webp') {
+      contentType = 'image/webp';
+    } else if (!contentType.startsWith('image/') && !contentType.startsWith('application/')) {
       contentType = `image/${fileExtension === 'png' ? 'png' : fileExtension === 'gif' ? 'gif' : 'jpeg'}`;
     }
 
