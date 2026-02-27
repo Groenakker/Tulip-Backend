@@ -70,11 +70,14 @@ export const getDocumentById = async (req, res) => {
       return res.status(403).json({ message: "Invalid tenant context" });
     }
 
-    const document = await Document.findOne({ _id: id, company_id: companyId });
+    const document = await Document.findOne({ _id: id, company_id: companyId })
+      .populate("createdBy", "name");
     if (!document)
       return res.status(404).json({ message: "Document not found" });
 
     const result = document.toObject();
+    // Expose owner as creator's name (no owner field in schema)
+    result.owner = result.createdBy?.name ?? "";
 
     if (include.includes("versions")) {
       const versions = await DocumentVersion.find({
@@ -200,12 +203,14 @@ export const createDocument = async (req, res) => {
     }
 
     const firstFile = files[0];
+    // If stakeholders are added at creation, document is sent for approval → Review; otherwise Creation
+    const initialStatus = stakeholders.length > 0 ? "Review" : "Creation";
     const doc = new Document({
       documentID,
       name,
       category,
       description,
-      status: "Creation",
+      status: initialStatus,
       currentVersion: "v1.0",
       fileName: firstFile.fileName,
       fileUrl: firstFile.fileUrl,
@@ -297,6 +302,15 @@ export const updateDocument = async (req, res) => {
       return res.status(403).json({ message: "Invalid tenant context" });
     }
 
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+    if (document.status === "Published" || document.status === "Archived") {
+      return res.status(400).json({
+        message: "Cannot update a published or archived document",
+      });
+    }
+
     const updateData = { ...req.body };
     if (req.body.company_id !== undefined) {
       updateData.company_id = req.body.company_id;
@@ -324,6 +338,15 @@ export const deleteDocument = async (req, res) => {
     const companyId = req.user?.company_id;
     if (!companyId) {
       return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+    if (document.status === "Published" || document.status === "Archived") {
+      return res.status(400).json({
+        message: "Cannot delete a published or archived document",
+      });
     }
 
     const deleted = await Document.findOneAndDelete({
@@ -395,6 +418,11 @@ export const addDocumentVersion = async (req, res) => {
     const document = await Document.findOne({ _id: id, company_id: companyId });
     if (!document)
       return res.status(404).json({ message: "Document not found" });
+    if (document.status === "Published" || document.status === "Archived") {
+      return res.status(400).json({
+        message: "Cannot add versions to a published or archived document",
+      });
+    }
 
     const body = req.body || {};
     const versionNum =
@@ -532,6 +560,11 @@ export const updateDocumentVersion = async (req, res) => {
     const document = await Document.findOne({ _id: id, company_id: companyId });
     if (!document)
       return res.status(404).json({ message: "Document not found" });
+    if (document.status === "Published" || document.status === "Archived") {
+      return res.status(400).json({
+        message: "Cannot update versions of a published or archived document",
+      });
+    }
 
     const updateData = { ...req.body };
     const updated = await DocumentVersion.findOneAndUpdate(
@@ -566,6 +599,15 @@ export const deleteDocumentVersion = async (req, res) => {
     const companyId = req.user?.company_id;
     if (!companyId) {
       return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+    if (document.status === "Published" || document.status === "Archived") {
+      return res.status(400).json({
+        message: "Cannot delete versions of a published or archived document",
+      });
     }
 
     const version = await DocumentVersion.findOne({

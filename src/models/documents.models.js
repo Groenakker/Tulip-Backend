@@ -12,7 +12,7 @@ const documentSchema = new mongoose.Schema(
     name: { type: String, trim: true, required: true },
     status: {
       type: String,
-      enum: ["Creation", "Review", "Update", "Rejected", "Published"],
+      enum: ["Creation", "Review", "Update", "Rejected", "Published", "Archived"],
       default: "Creation",
     },
     description: { type: String, trim: true },
