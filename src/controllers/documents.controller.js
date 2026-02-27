@@ -1,7 +1,6 @@
 import Document from "../models/documents.models.js";
 import DocumentVersion from "../models/documentVersions.models.js";
 import DocumentReview from "../models/documentReviews.models.js";
-import User from "../models/user.models.js";
 import { uploadFileToSupabase } from "../lib/supabase.js";
 import { sendDocumentStakeholderEmail } from "../utils/mailer.js";
 import { createStakeholderApprovalToken } from "../utils/stakeholderApprovalToken.js";
@@ -228,7 +227,9 @@ export const createDocument = async (req, res) => {
       date: new Date(),
       author: req.user?.name,
       authorId: req.user?._id,
-      status: "Creation",
+      // Mirror document status for the initial version:
+      // Creation when there are no stakeholders, Review when there are.
+      status: initialStatus,
       fileName: firstFile.fileName,
       fileUrl: firstFile.fileUrl,
       files,
@@ -242,48 +243,24 @@ export const createDocument = async (req, res) => {
     });
     await version.save();
 
-    // Notify stakeholders with email (fire-and-forget; don't block response)
+    // Notify stakeholders with email (fire-and-forget). Same approval link for all (team and external).
     const addedByName = req.user?.name || req.user?.email;
     const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
     for (const s of version.stakeholders || []) {
-      const email = (s.email || "").trim().toLowerCase();
+      const email = (s.email || "").trim();
       if (!email) continue;
-
-      const isTeamMember = await User.findOne({
-        email,
-        company_id: companyId,
-      })
-        .select("_id")
-        .lean();
-
-      if (isTeamMember) {
-        // Team member: link to document in app (they log in and open the document)
-        const documentLink = `${frontendBaseUrl}/DocumentManagement/DocumentDetails/${doc._id}`;
-        sendDocumentStakeholderEmail({
-          to: s.email?.trim() || email,
-          documentName: name,
-          documentID,
-          role: s.role || "Stakeholder",
-          addedByName,
-          documentLink,
-        }).catch((err) => {
-          console.error(`[documents] Failed to send team member email to ${email}:`, err.message);
-        });
-      } else {
-        // External stakeholder: token-based approval link (no login required)
-        const token = createStakeholderApprovalToken(version._id, s._id);
-        const approvalLink = `${frontendBaseUrl}/approval/${token}`;
-        sendDocumentStakeholderEmail({
-          to: s.email?.trim() || email,
-          documentName: name,
-          documentID,
-          role: s.role || "Stakeholder",
-          addedByName,
-          approvalLink,
-        }).catch((err) => {
-          console.error(`[documents] Failed to send stakeholder email to ${email}:`, err.message);
-        });
-      }
+      const token = createStakeholderApprovalToken(version._id, s._id);
+      const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+      sendDocumentStakeholderEmail({
+        to: email,
+        documentName: name,
+        documentID,
+        role: s.role || "Stakeholder",
+        addedByName,
+        approvalLink,
+      }).catch((err) => {
+        console.error(`[documents] Failed to send stakeholder email to ${email}:`, err.message);
+      });
     }
 
     return res.status(201).json(doc);
@@ -465,6 +442,14 @@ export const addDocumentVersion = async (req, res) => {
       }
     }
 
+    // If this is the first time stakeholders are being added while the document
+    // is still in Creation (no prior approval cycle), move the document to Review.
+    if (stakeholders.length > 0 && document.status === "Creation") {
+      document.status = "Review";
+      document.updatedBy = req.user?._id;
+      await document.save();
+    }
+
     const version = new DocumentVersion({
       documentId: id,
       company_id: companyId,
@@ -487,46 +472,24 @@ export const addDocumentVersion = async (req, res) => {
     });
     await version.save();
 
-    // Notify stakeholders with email (same as create document: team → document link, external → approval token)
+    // Notify stakeholders with email. Same approval link for all (team and external).
     const addedByName = req.user?.name || req.user?.email;
     const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
     for (const s of version.stakeholders || []) {
-      const email = (s.email || "").trim().toLowerCase();
+      const email = (s.email || "").trim();
       if (!email) continue;
-
-      const isTeamMember = await User.findOne({
-        email,
-        company_id: companyId,
-      })
-        .select("_id")
-        .lean();
-
-      if (isTeamMember) {
-        const documentLink = `${frontendBaseUrl}/DocumentManagement/DocumentDetails/${id}`;
-        sendDocumentStakeholderEmail({
-          to: s.email?.trim() || email,
-          documentName: document.name,
-          documentID: document.documentID,
-          role: s.role || "Stakeholder",
-          addedByName,
-          documentLink,
-        }).catch((err) => {
-          console.error(`[documents] Failed to send team member email (version) to ${email}:`, err.message);
-        });
-      } else {
-        const token = createStakeholderApprovalToken(version._id, s._id);
-        const approvalLink = `${frontendBaseUrl}/approval/${token}`;
-        sendDocumentStakeholderEmail({
-          to: s.email?.trim() || email,
-          documentName: document.name,
-          documentID: document.documentID,
-          role: s.role || "Stakeholder",
-          addedByName,
-          approvalLink,
-        }).catch((err) => {
-          console.error(`[documents] Failed to send stakeholder email (version) to ${email}:`, err.message);
-        });
-      }
+      const token = createStakeholderApprovalToken(version._id, s._id);
+      const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+      sendDocumentStakeholderEmail({
+        to: email,
+        documentName: document.name,
+        documentID: document.documentID,
+        role: s.role || "Stakeholder",
+        addedByName,
+        approvalLink,
+      }).catch((err) => {
+        console.error(`[documents] Failed to send stakeholder email (version) to ${email}:`, err.message);
+      });
     }
 
     const result = version.toObject();
