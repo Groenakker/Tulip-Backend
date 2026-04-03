@@ -42,6 +42,7 @@ const PORT = process.env.PORT || 3000;
 // Configure CORS to allow credentials
 const allowedOrigins = [
   'http://localhost:5173',
+  'https://tulip.groenakker.com',
   'https://groenakker.netlify.app',
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
 ];
