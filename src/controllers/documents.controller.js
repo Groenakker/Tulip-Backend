@@ -599,6 +599,153 @@ export const deleteDocumentVersion = async (req, res) => {
   }
 };
 
+// ----- Stakeholders (nested under version) -----
+
+export const addVersionStakeholder = async (req, res) => {
+  try {
+    const { id, versionId } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const version = await DocumentVersion.findOne({
+      _id: versionId,
+      documentId: id,
+      company_id: companyId,
+    });
+    if (!version)
+      return res.status(404).json({ message: "Version not found" });
+
+    const hasApproved = (version.stakeholders || []).some(
+      (s) => (s.status || "").toLowerCase() === "approved"
+    );
+    if (hasApproved) {
+      return res.status(400).json({
+        message: "Cannot add stakeholders after approval has started",
+      });
+    }
+
+    const body = req.body || {};
+    if (!body.name || !body.email || !body.role) {
+      return res.status(400).json({ message: "name, email, and role are required" });
+    }
+
+    const stakeholderData = {
+      name: body.name,
+      email: body.email,
+      role: body.role,
+      status: "Pending",
+      avatar: body.avatar,
+    };
+
+    version.stakeholders.push(stakeholderData);
+
+    if (version.status === "Creation") {
+      version.status = "Review";
+    }
+
+    if (document.status === "Creation") {
+      document.status = "Review";
+      document.updatedBy = req.user?._id;
+      await document.save();
+    }
+
+    await version.save();
+
+    const addedStakeholder = version.stakeholders[version.stakeholders.length - 1];
+
+    const addedByName = req.user?.name || req.user?.email;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
+    const email = (addedStakeholder.email || "").trim();
+    if (email) {
+      const token = createStakeholderApprovalToken(version._id, addedStakeholder._id);
+      const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+      sendDocumentStakeholderEmail({
+        to: email,
+        documentName: document.name,
+        documentID: document.documentID,
+        role: addedStakeholder.role || "Stakeholder",
+        addedByName,
+        approvalLink,
+      }).catch((err) => {
+        console.error(`[documents] Failed to send stakeholder email to ${email}:`, err.message);
+      });
+    }
+
+    res.status(201).json({
+      id: addedStakeholder._id,
+      name: addedStakeholder.name,
+      email: addedStakeholder.email,
+      role: addedStakeholder.role,
+      status: addedStakeholder.status,
+      avatar: addedStakeholder.avatar,
+      documentStatus: document.status,
+      versionStatus: version.status,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to add stakeholder", error: error.message });
+  }
+};
+
+export const resendStakeholderEmail = async (req, res) => {
+  try {
+    const { id, versionId, stakeholderId } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const document = await Document.findOne({ _id: id, company_id: companyId });
+    if (!document)
+      return res.status(404).json({ message: "Document not found" });
+
+    const version = await DocumentVersion.findOne({
+      _id: versionId,
+      documentId: id,
+      company_id: companyId,
+    });
+    if (!version)
+      return res.status(404).json({ message: "Version not found" });
+
+    const stakeholder = version.stakeholders.id(stakeholderId);
+    if (!stakeholder) {
+      return res.status(404).json({ message: "Stakeholder not found" });
+    }
+
+    const email = (stakeholder.email || "").trim();
+    if (!email) {
+      return res.status(400).json({ message: "Stakeholder has no email address" });
+    }
+
+    const addedByName = req.user?.name || req.user?.email;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || process.env.CLIENT_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
+    const token = createStakeholderApprovalToken(version._id, stakeholder._id);
+    const approvalLink = `${frontendBaseUrl}/approval/${token}`;
+
+    await sendDocumentStakeholderEmail({
+      to: email,
+      documentName: document.name,
+      documentID: document.documentID,
+      role: stakeholder.role || "Stakeholder",
+      addedByName,
+      approvalLink,
+    });
+
+    res.json({ message: `Approval email sent to ${email}` });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to send approval email", error: error.message });
+  }
+};
+
 // ----- Reviews (nested under document) -----
 
 export const getDocumentReviews = async (req, res) => {

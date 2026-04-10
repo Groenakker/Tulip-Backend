@@ -9,6 +9,8 @@ import {
   addDocumentVersion,
   updateDocumentVersion,
   deleteDocumentVersion,
+  addVersionStakeholder,
+  resendStakeholderEmail,
   getDocumentReviews,
   addDocumentReview,
 } from "../controllers/documents.controller.js";
@@ -53,6 +55,17 @@ router.delete(
   "/:id/versions/:versionId",
   checkPermission("Documents", "update"),
   deleteDocumentVersion
+);
+
+router.post(
+  "/:id/versions/:versionId/stakeholders",
+  checkPermission("Documents", "update"),
+  addVersionStakeholder
+);
+router.post(
+  "/:id/versions/:versionId/stakeholders/:stakeholderId/send-email",
+  checkPermission("Documents", "update"),
+  resendStakeholderEmail
 );
 
 router.get(
