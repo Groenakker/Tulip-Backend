@@ -14,6 +14,12 @@ const instanceMovementSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    sampleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Sample",
+      required: false,
+      index: true,
+    },
     movementType: {
       type: String,
       enum: ["Received", "In Warehouse", "Shipped"],

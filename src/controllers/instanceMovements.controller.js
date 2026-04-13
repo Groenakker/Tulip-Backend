@@ -163,6 +163,29 @@ export const getInstanceMovementsByInstance = async (req, res) => {
   }
 };
 
+export const getInstanceMovementsBySample = async (req, res) => {
+  try {
+    const { sampleId } = req.params;
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const movements = await InstanceMovement.find({ sampleId, company_id: companyId })
+      .populate("instanceId", "instanceCode sampleCode lotNo status warehouseID")
+      .populate("sampleId", "sampleCode name description")
+      .populate("warehouseId", "warehouseID address")
+      .populate("receivingId", "receivingCode origin destination")
+      .populate("shippingId", "shippingCode shipmentOrigin shipmentDestination")
+      .populate("createdBy", "name email")
+      .sort({ movementDate: -1, createdAt: -1 });
+
+    res.json(movements);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch movements by sample", error: error.message });
+  }
+};
+
 export const getInstanceMovementsByType = async (req, res) => {
   try {
     const { movementType } = req.params;

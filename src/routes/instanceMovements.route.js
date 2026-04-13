@@ -6,6 +6,7 @@ import {
   updateInstanceMovement,
   deleteInstanceMovement,
   getInstanceMovementsByInstance,
+  getInstanceMovementsBySample,
   getInstanceMovementsByType,
 } from "../controllers/instanceMovements.controller.js";
 import { verifyToken } from "../lib/utils.js";
@@ -20,6 +21,8 @@ router.use(verifyToken);
 router.get("/", checkPermission("InstanceMovements", "read"), getAllInstanceMovements);
 
 router.get("/instance/:instanceId", checkPermission("Instances", "read"), getInstanceMovementsByInstance);
+
+router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstanceMovementsBySample);
 
 router.get("/type/:movementType", checkPermission("InstanceMovements", "read"), getInstanceMovementsByType);
 

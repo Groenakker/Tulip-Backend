@@ -29,6 +29,11 @@ const warehouseSchema = new mongoose.Schema(
       default: "Empty",
       required: true,
     },
+    capacity: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { timestamps: true }
 );

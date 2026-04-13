@@ -1,4 +1,11 @@
 import Warehouse from "../models/warehouses.models.js";
+import Instance from "../models/instances.models.js";
+
+function computeSpaceStatus(occupied, capacity) {
+  if (occupied === 0) return "Empty";
+  if (capacity > 0 && occupied >= capacity) return "Full";
+  return "Space Available";
+}
 
 export const getAllWarehouses = async (req, res) => {
   try {
@@ -25,7 +32,6 @@ export const getAllWarehouses = async (req, res) => {
 export const getWarehouseById = async (req, res) => {
   const { id } = req.params;
   try {
-    // Filter by user's company_id for tenant isolation
     const companyId = req.user?.company_id;
     if (!companyId) {
       return res.status(403).json({ message: "Invalid tenant context" });
@@ -37,6 +43,13 @@ export const getWarehouseById = async (req, res) => {
       return res.status(404).json({ message: "Warehouse not found" });
     }
 
+    const occupied = await Instance.countDocuments({ warehouseID: id });
+    const liveSpace = computeSpaceStatus(occupied, warehouse.capacity);
+    if (warehouse.space !== liveSpace) {
+      warehouse.space = liveSpace;
+      await warehouse.save();
+    }
+
     res.json(warehouse);
   } catch (error) {
     res
@@ -46,7 +59,7 @@ export const getWarehouseById = async (req, res) => {
 };
 
 export const createWarehouse = async (req, res) => {
-  const { warehouseID, address, storage, space, company_id } = req.body;
+  const { warehouseID, address, storage, space, capacity, company_id } = req.body;
 
   try {
     // Use company_id from authenticated user if not provided in body
@@ -65,7 +78,8 @@ export const createWarehouse = async (req, res) => {
       warehouseID,
       address,
       storage,
-      space: space || "Empty",
+      space: "Empty",
+      capacity: capacity || 0,
       company_id: warehouseCompanyId
     });
 
@@ -78,7 +92,7 @@ export const createWarehouse = async (req, res) => {
 
 export const updateWarehouse = async (req, res) => {
   const { id } = req.params;
-  const { warehouseID, address, storage, space, company_id } = req.body;
+  const { warehouseID, address, storage, space, capacity, company_id } = req.body;
 
   try {
     // Filter by user's company_id for tenant isolation
@@ -106,14 +120,18 @@ export const updateWarehouse = async (req, res) => {
       }
     }
 
+    const newCapacity = capacity !== undefined ? capacity : currentWarehouse.capacity;
+    const occupied = await Instance.countDocuments({ warehouseID: id });
+    const autoSpace = computeSpaceStatus(occupied, newCapacity);
+
     const updateData = {
       warehouseID,
       address,
       storage,
-      space,
+      space: autoSpace,
+      capacity,
     };
 
-    // Add company_id if provided
     if (company_id !== undefined) {
       updateData.company_id = company_id;
     }
