@@ -107,9 +107,33 @@ export const approve = async (req, res) => {
     stakeholder.status = "Approved";
     if (signature) stakeholder.signature = signature;
     stakeholder.approvedAt = new Date();
+
+    // Check if all APPROVER-role stakeholders have now approved
+    const approvers = (version.stakeholders || []).filter(
+      (s) => (s.role || "").toUpperCase() === "APPROVER"
+    );
+    const allApproversApproved =
+      approvers.length > 0 &&
+      approvers.every((s) => (s.status || "").toLowerCase() === "approved");
+
+    if (allApproversApproved) {
+      version.status = "Approved";
+
+      const document = await Document.findById(version.documentId);
+      if (document && document.status === "Review") {
+        document.status = "Approved";
+        await document.save();
+      }
+    }
+
     await version.save();
 
-    res.json({ message: "Document approved successfully.", status: "Approved" });
+    res.json({
+      message: "Document approved successfully.",
+      status: "Approved",
+      allApproversApproved,
+      versionStatus: version.status,
+    });
   } catch (error) {
     res
       .status(500)
@@ -148,9 +172,25 @@ export const reject = async (req, res) => {
     stakeholder.status = "Rejected";
     stakeholder.rejectionReason = reason || "";
     stakeholder.rejectedAt = new Date();
+
+    // If a stakeholder with APPROVER role rejects, mark version and document as Rejected
+    if ((stakeholder.role || "").toUpperCase() === "APPROVER") {
+      version.status = "Rejected";
+
+      const document = await Document.findById(version.documentId);
+      if (document && !["Published", "Archived"].includes(document.status)) {
+        document.status = "Rejected";
+        await document.save();
+      }
+    }
+
     await version.save();
 
-    res.json({ message: "Document rejected.", status: "Rejected" });
+    res.json({
+      message: "Document rejected.",
+      status: "Rejected",
+      versionStatus: version.status,
+    });
   } catch (error) {
     res
       .status(500)

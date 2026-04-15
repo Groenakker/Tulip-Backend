@@ -282,9 +282,59 @@ export const updateDocument = async (req, res) => {
     const document = await Document.findOne({ _id: id, company_id: companyId });
     if (!document)
       return res.status(404).json({ message: "Document not found" });
-    if (document.status === "Published" || document.status === "Archived") {
+
+    // Allow Published → Archived transition, but block all other edits
+    // on published/archived documents
+    const isArchiving =
+      document.status === "Published" && req.body.status === "Archived";
+    if (
+      (document.status === "Published" || document.status === "Archived") &&
+      !isArchiving
+    ) {
       return res.status(400).json({
-        message: "Cannot update a published or archived document",
+        message:
+          document.status === "Archived"
+            ? "Cannot update an archived document"
+            : "Cannot update a published document. You may archive it instead.",
+      });
+    }
+
+    // Server-side publish guard: verify all APPROVER stakeholders approved
+    if (req.body.status === "Published") {
+      const latestVersion = await DocumentVersion.findOne({
+        documentId: id,
+        company_id: companyId,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (!latestVersion) {
+        return res.status(400).json({ message: "No versions found for this document" });
+      }
+
+      const approvers = (latestVersion.stakeholders || []).filter(
+        (s) => (s.role || "").toUpperCase() === "APPROVER"
+      );
+
+      if (approvers.length === 0) {
+        return res.status(400).json({
+          message: "Cannot publish: no approver stakeholders on the latest version",
+        });
+      }
+
+      const allApproved = approvers.every(
+        (s) => (s.status || "").toLowerCase() === "approved"
+      );
+
+      if (!allApproved) {
+        return res.status(400).json({
+          message: "Cannot publish: not all approver stakeholders have approved",
+        });
+      }
+
+      // Also update the latest version status to Published
+      await DocumentVersion.findByIdAndUpdate(latestVersion._id, {
+        status: "Published",
       });
     }
 

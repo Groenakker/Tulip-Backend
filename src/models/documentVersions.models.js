@@ -36,7 +36,7 @@ const documentVersionSchema = new mongoose.Schema(
     changes: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["Creation", "Review", "Update", "Rejected", "Published"],
+      enum: ["Creation", "Review", "Update", "Rejected", "Approved", "Published"],
       default: "Creation",
     },
     fileName: { type: String, trim: true },
