@@ -159,6 +159,47 @@ const optionalEnvVars = {
       // Optional, no validation needed if empty
       return null;
     }
+  },
+  SHIPPO_API_TOKEN: {
+    name: 'SHIPPO_API_TOKEN',
+    default: '',
+    description: 'Shippo API token (shippo_test_* or shippo_live_*). Required for Shippo features.',
+    validate: (value) => {
+      if (value && value.trim() !== '' && !/^shippo_(test|live)_/.test(value)) {
+        return 'SHIPPO_API_TOKEN should start with shippo_test_ or shippo_live_';
+      }
+      return null;
+    }
+  },
+  SHIPPO_API_VERSION: { name: 'SHIPPO_API_VERSION', default: '', description: 'Shippo API version header', validate: () => null },
+  SHIPPO_FROM_NAME: { name: 'SHIPPO_FROM_NAME', default: '', description: 'Default ship-from name', validate: () => null },
+  SHIPPO_FROM_COMPANY: { name: 'SHIPPO_FROM_COMPANY', default: '', description: 'Default ship-from company', validate: () => null },
+  SHIPPO_FROM_STREET1: { name: 'SHIPPO_FROM_STREET1', default: '', description: 'Default ship-from street', validate: () => null },
+  SHIPPO_FROM_STREET2: { name: 'SHIPPO_FROM_STREET2', default: '', description: 'Default ship-from street 2', validate: () => null },
+  SHIPPO_FROM_CITY: { name: 'SHIPPO_FROM_CITY', default: '', description: 'Default ship-from city', validate: () => null },
+  SHIPPO_FROM_STATE: { name: 'SHIPPO_FROM_STATE', default: '', description: 'Default ship-from state', validate: () => null },
+  SHIPPO_FROM_ZIP: { name: 'SHIPPO_FROM_ZIP', default: '', description: 'Default ship-from zip', validate: () => null },
+  SHIPPO_FROM_COUNTRY: { name: 'SHIPPO_FROM_COUNTRY', default: 'US', description: 'Default ship-from country ISO-2', validate: () => null },
+  SHIPPO_FROM_PHONE: { name: 'SHIPPO_FROM_PHONE', default: '', description: 'Default ship-from phone', validate: () => null },
+  SHIPPO_FROM_EMAIL: { name: 'SHIPPO_FROM_EMAIL', default: '', description: 'Default ship-from email', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_LENGTH: { name: 'SHIPPO_DEFAULT_PARCEL_LENGTH', default: '10', description: 'Default parcel length', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_WIDTH: { name: 'SHIPPO_DEFAULT_PARCEL_WIDTH', default: '8', description: 'Default parcel width', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_HEIGHT: { name: 'SHIPPO_DEFAULT_PARCEL_HEIGHT', default: '4', description: 'Default parcel height', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_DISTANCE_UNIT: { name: 'SHIPPO_DEFAULT_PARCEL_DISTANCE_UNIT', default: 'in', description: 'Distance unit: in or cm', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_WEIGHT: { name: 'SHIPPO_DEFAULT_PARCEL_WEIGHT', default: '2', description: 'Default parcel weight', validate: () => null },
+  SHIPPO_DEFAULT_PARCEL_MASS_UNIT: { name: 'SHIPPO_DEFAULT_PARCEL_MASS_UNIT', default: 'lb', description: 'Mass unit: lb, oz, kg, g', validate: () => null },
+  SHIPPO_LABEL_FILE_TYPE: {
+    name: 'SHIPPO_LABEL_FILE_TYPE',
+    default: 'PDF_4x6',
+    description: 'Preferred Shippo label file type',
+    validate: (value) => {
+      if (!value) return null;
+      const allowed = ['PDF', 'PDF_4x6', 'PDF_4x8', 'PNG', 'PNG_2.3x7.5', 'ZPLII'];
+      if (!allowed.includes(value)) {
+        return `SHIPPO_LABEL_FILE_TYPE must be one of: ${allowed.join(', ')}`;
+      }
+      return null;
+    }
   }
 };
 

@@ -75,6 +75,32 @@ export const createCompany = async (req, res) => {
   }
 };
 
+// Normalize a single shipping address entry (server-side, never trust
+// anything the client sends verbatim). Returns a plain object suitable
+// for storage in the sub-document array.
+const sanitizeShippingAddress = (entry = {}) => ({
+  ...(entry._id ? { _id: entry._id } : {}),
+  label: typeof entry.label === "string" ? entry.label.trim() : "",
+  name: typeof entry.name === "string" ? entry.name.trim() : "",
+  company: typeof entry.company === "string" ? entry.company.trim() : "",
+  street1: typeof entry.street1 === "string" ? entry.street1.trim() : "",
+  street2: typeof entry.street2 === "string" ? entry.street2.trim() : "",
+  city: typeof entry.city === "string" ? entry.city.trim() : "",
+  state: typeof entry.state === "string" ? entry.state.trim() : "",
+  zip: typeof entry.zip === "string" ? entry.zip.trim() : "",
+  country:
+    (typeof entry.country === "string" && entry.country.trim()
+      ? entry.country.trim()
+      : "US"
+    ).toUpperCase(),
+  phone: typeof entry.phone === "string" ? entry.phone.trim() : "",
+  email:
+    typeof entry.email === "string"
+      ? entry.email.trim().toLowerCase()
+      : "",
+  isDefault: Boolean(entry.isDefault),
+});
+
 export const updateCompany = async (req, res) => {
   const { id } = req.params;
   const payload = req.body || {};
@@ -84,8 +110,16 @@ export const updateCompany = async (req, res) => {
     "company_name"
   );
   const hasAddress = Object.prototype.hasOwnProperty.call(payload, "address");
+  const hasEmail = Object.prototype.hasOwnProperty.call(
+    payload,
+    "company_email"
+  );
+  const hasShippingAddresses = Object.prototype.hasOwnProperty.call(
+    payload,
+    "shippingAddresses"
+  );
 
-  if (!hasName && !hasAddress) {
+  if (!hasName && !hasAddress && !hasEmail && !hasShippingAddresses) {
     return res
       .status(400)
       .json({ message: "No valid fields provided to update." });
@@ -117,6 +151,44 @@ export const updateCompany = async (req, res) => {
     }
 
     updates.address = payload.address.trim();
+  }
+
+  if (hasEmail) {
+    if (typeof payload.company_email !== "string") {
+      return res
+        .status(400)
+        .json({ message: "Email must be a string." });
+    }
+    updates.company_email = payload.company_email.trim().toLowerCase();
+  }
+
+  if (hasShippingAddresses) {
+    if (!Array.isArray(payload.shippingAddresses)) {
+      return res
+        .status(400)
+        .json({ message: "shippingAddresses must be an array." });
+    }
+
+    const sanitized = payload.shippingAddresses.map(sanitizeShippingAddress);
+
+    for (const entry of sanitized) {
+      if (!entry.label) {
+        return res.status(400).json({
+          message: "Each shipping address must have a label.",
+        });
+      }
+    }
+
+    // Enforce a single default — if multiple are flagged, keep the first.
+    let seenDefault = false;
+    for (const entry of sanitized) {
+      if (entry.isDefault) {
+        if (seenDefault) entry.isDefault = false;
+        else seenDefault = true;
+      }
+    }
+
+    updates.shippingAddresses = sanitized;
   }
 
   try {
@@ -160,6 +232,140 @@ export const deleteCompany = async (req, res) => {
     res
       .status(500)
       .json({ message: "Failed to delete company", error: error.message });
+  }
+};
+
+// ============================================================
+// Shipping Addresses — dedicated endpoints
+// ------------------------------------------------------------
+// The PUT /:id route accepts a full shippingAddresses array, but
+// the UI also likes a row-level API so it can add / edit / delete
+// one address without having to replay the whole list.
+// ============================================================
+
+export const listShippingAddresses = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const company = await Company.findById(id).select("shippingAddresses");
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+    res.json(company.shippingAddresses || []);
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to fetch shipping addresses", error: error.message });
+  }
+};
+
+export const addShippingAddress = async (req, res) => {
+  const { id } = req.params;
+  const entry = sanitizeShippingAddress(req.body || {});
+  if (!entry.label) {
+    return res
+      .status(400)
+      .json({ message: "Shipping address label is required." });
+  }
+
+  try {
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    // If this entry is default, clear the flag on the rest.
+    if (entry.isDefault) {
+      (company.shippingAddresses || []).forEach((a) => (a.isDefault = false));
+    } else if ((company.shippingAddresses || []).length === 0) {
+      // First address added — promote it to default automatically.
+      entry.isDefault = true;
+    }
+
+    company.shippingAddresses.push(entry);
+    await company.save();
+    res.status(201).json(company.shippingAddresses);
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to add shipping address", error: error.message });
+  }
+};
+
+export const updateShippingAddress = async (req, res) => {
+  const { id, addressId } = req.params;
+  const entry = sanitizeShippingAddress(req.body || {});
+  if (!entry.label) {
+    return res
+      .status(400)
+      .json({ message: "Shipping address label is required." });
+  }
+
+  try {
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const target = company.shippingAddresses.id(addressId);
+    if (!target) {
+      return res.status(404).json({ message: "Shipping address not found" });
+    }
+
+    if (entry.isDefault) {
+      company.shippingAddresses.forEach((a) => {
+        a.isDefault = String(a._id) === String(target._id);
+      });
+    }
+
+    Object.assign(target, entry);
+    await company.save();
+    res.json(company.shippingAddresses);
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company or address ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to update shipping address", error: error.message });
+  }
+};
+
+export const deleteShippingAddress = async (req, res) => {
+  const { id, addressId } = req.params;
+  try {
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const target = company.shippingAddresses.id(addressId);
+    if (!target) {
+      return res.status(404).json({ message: "Shipping address not found" });
+    }
+
+    const wasDefault = target.isDefault;
+    target.deleteOne();
+
+    // If we removed the default, promote the first remaining address.
+    if (wasDefault && company.shippingAddresses.length > 0) {
+      company.shippingAddresses[0].isDefault = true;
+    }
+
+    await company.save();
+    res.json(company.shippingAddresses);
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company or address ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to delete shipping address", error: error.message });
   }
 };
 

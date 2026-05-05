@@ -29,6 +29,9 @@ import rolesRoutes from "./routes/roles.route.js";
 import usersRoutes from "./routes/users.route.js";
 import healthRoutes from "./routes/health.route.js";
 import stakeholderApprovalRoutes from "./routes/stakeholderApproval.route.js";
+import shippoRoutes from "./routes/shippo.route.js";
+import auditLogsRoutes from "./routes/auditLogs.route.js";
+import { auditMutations } from "./lib/audit.js";
 
 const app = express();
 
@@ -68,6 +71,14 @@ const corsOptions = {
 
 app.use("/health", healthRoutes);
 app.use(cors(corsOptions));
+
+// Audit middleware: runs before the route controllers on every /api/*
+// request. It only actually logs successful mutations (POST/PUT/PATCH/
+// DELETE) on paths that are registered in lib/audit.js. Each matching
+// update/delete request also gets a pre-fetched "before" snapshot so the
+// diff in the activity log is accurate.
+app.use("/api", auditMutations);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/bpartners", bPartnerRoutes);
 app.use("/api/projects", projectRoutes);
@@ -84,6 +95,8 @@ app.use("/api/permissions", permissionsRoutes);
 app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/stakeholder-approval", stakeholderApprovalRoutes);
+app.use("/api/shippo", shippoRoutes);
+app.use("/api/audit-logs", auditLogsRoutes);
 
 app.listen(PORT, () => {
   console.log("server is running on port " + PORT);
