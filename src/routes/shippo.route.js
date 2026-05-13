@@ -9,6 +9,7 @@ import {
   getLabel,
   trackLabel,
   refundShippingLabel,
+  autoBuildCustomsItems,
 } from "../controllers/shippo.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -32,5 +33,12 @@ router.post("/shipping/:id/label", checkPermission("Shipping", "update"), buyLab
 router.get("/shipping/:id/label", checkPermission("Shipping", "read"), getLabel);
 router.get("/shipping/:id/track", checkPermission("Shipping", "read"), trackLabel);
 router.post("/shipping/:id/refund", checkPermission("Shipping", "update"), refundShippingLabel);
+// Build customs items from the shipping's samples without touching Shippo —
+// used by the "Auto-fill from samples" button on the customs declaration UI.
+router.post(
+  "/shipping/:id/customs/auto-build",
+  checkPermission("Shipping", "read"),
+  autoBuildCustomsItems
+);
 
 export default router;

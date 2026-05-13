@@ -30,6 +30,7 @@ import usersRoutes from "./routes/users.route.js";
 import healthRoutes from "./routes/health.route.js";
 import stakeholderApprovalRoutes from "./routes/stakeholderApproval.route.js";
 import shippoRoutes from "./routes/shippo.route.js";
+import tariffCodeRoutes from "./routes/tariffCode.route.js";
 import auditLogsRoutes from "./routes/auditLogs.route.js";
 import { auditMutations } from "./lib/audit.js";
 
@@ -96,6 +97,7 @@ app.use("/api/roles", rolesRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/stakeholder-approval", stakeholderApprovalRoutes);
 app.use("/api/shippo", shippoRoutes);
+app.use("/api/tariff-codes", tariffCodeRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 
 app.listen(PORT, () => {

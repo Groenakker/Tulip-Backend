@@ -31,9 +31,10 @@ const shippingSchema = new mongoose.Schema(
       
       trim: true,
     },
+    // No longer collected on the form — set automatically when a label is
+    // purchased through Shippo (see shippo.controller.js buyLabel handler).
     shipmentDate: {
       type: Date,
-      required: true,
     },
     status: {
       type: String,

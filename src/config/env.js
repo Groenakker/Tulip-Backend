@@ -200,6 +200,46 @@ const optionalEnvVars = {
       }
       return null;
     }
+  },
+  // ----------------------------------------------------------------
+  // TEST-MODE ONLY (remove or leave blank once you switch to a
+  // shippo_live_* token).
+  // ----------------------------------------------------------------
+  // Shippo's sandbox refuses live tracking lookups for real carrier
+  // names like "dhl_express" or "usps" — you must use the carrier
+  // "shippo" with one of these magic tracking numbers, each of which
+  // returns a fake tracking response in that state:
+  //   SHIPPO_PRE_TRANSIT, SHIPPO_TRANSIT, SHIPPO_DELIVERED,
+  //   SHIPPO_RETURNED, SHIPPO_FAILURE, SHIPPO_UNKNOWN
+  // When SHIPPO_API_TOKEN starts with "shippo_test_" AND this var is
+  // set, the trackLabel controller substitutes the saved tracking
+  // number for this value on the API call. The saved tracking number
+  // and carrier on the shipping document are NOT overwritten.
+  SHIPPO_TEST_TRACKING_STATE: {
+    name: 'SHIPPO_TEST_TRACKING_STATE',
+    default: 'SHIPPO_TRANSIT',
+    description: 'Test-mode tracking state override (sandbox only)',
+    validate: (value) => {
+      if (!value) return null;
+      const allowed = [
+        'SHIPPO_PRE_TRANSIT',
+        'SHIPPO_TRANSIT',
+        'SHIPPO_DELIVERED',
+        'SHIPPO_RETURNED',
+        'SHIPPO_FAILURE',
+        'SHIPPO_UNKNOWN',
+      ];
+      // Accept any case — we normalise to uppercase before forwarding to
+      // Shippo, so users don't have to remember the exact capitalisation.
+      const normalised = String(value).trim().toUpperCase();
+      if (!allowed.includes(normalised)) {
+        return `SHIPPO_TEST_TRACKING_STATE must be one of: ${allowed.join(', ')}`;
+      }
+      // Mutate the process env so consumers see the canonical value
+      // without each having to normalise it independently.
+      process.env.SHIPPO_TEST_TRACKING_STATE = normalised;
+      return null;
+    }
   }
 };
 

@@ -58,6 +58,19 @@ const sampleSchema = new mongoose.Schema(
     devicesUsed: { type: String, trim: true, default: "1" },
     countryOrigin: { type: String, trim: true },
     sampleMass: { type: String, trim: true },
+    // Customs / export classification.
+    // `tariffCode` is the 10-digit Schedule B / HS code that ends up in
+    // Shippo's customs item `tariff_number` for international shipments.
+    // `tariffDescription` is a denormalized snapshot of the description
+    // selected at submission time — kept locally so commercial invoices
+    // and audit logs still resolve even if Census later changes the
+    // description in a future Schedule B revision.
+    tariffCode: { type: String, trim: true, index: true },
+    tariffDescription: { type: String, trim: true },
+    // Per-unit customs declared value in USD. Optional; if missing, the
+    // shipping flow falls back to "1.00" so Shippo doesn't reject the
+    // declaration.
+    customsValue: { type: String, trim: true },
     surfaceArea: { type: String, trim: true },
     contactType: { 
       type: String, 

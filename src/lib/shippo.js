@@ -268,6 +268,32 @@ export const isShippoConfigured = () => {
   return Boolean(token && token.trim() !== "" && !token.includes("REPLACE_ME"));
 };
 
+/**
+ * True when the backend is talking to Shippo's sandbox.
+ *
+ * Tokens issued by Shippo are prefixed: `shippo_test_*` for sandbox,
+ * `shippo_live_*` for production. The track endpoint is the main thing
+ * that behaves differently between the two — see trackLabel in
+ * shippo.controller.js for the test-mode tracking override.
+ */
+export const isShippoTestMode = () => {
+  const token = process.env.SHIPPO_API_TOKEN || "";
+  return token.startsWith("shippo_test_");
+};
+
+/**
+ * Valid test tracking numbers Shippo's sandbox recognises. Each one
+ * triggers a deterministic fake tracking response with that status.
+ */
+export const SHIPPO_TEST_TRACKING_NUMBERS = Object.freeze([
+  "SHIPPO_PRE_TRANSIT",
+  "SHIPPO_TRANSIT",
+  "SHIPPO_DELIVERED",
+  "SHIPPO_RETURNED",
+  "SHIPPO_FAILURE",
+  "SHIPPO_UNKNOWN",
+]);
+
 export default {
   getDefaultFromAddress,
   getDefaultParcel,
@@ -286,4 +312,6 @@ export default {
   createCustomsItem,
   createCustomsDeclaration,
   isShippoConfigured,
+  isShippoTestMode,
+  SHIPPO_TEST_TRACKING_NUMBERS,
 };

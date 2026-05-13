@@ -8,6 +8,8 @@
 
 import Shipping from "../models/shipping.models.js";
 import Bpartner from "../models/bPartners.models.js";
+import ShippingLine from "../models/shippingLines.models.js";
+import Sample from "../models/samples.models.js";
 import {
   createShipment as shippoCreateShipment,
   createTransaction as shippoCreateTransaction,
@@ -24,6 +26,8 @@ import {
   getDefaultParcel,
   getDefaultLabelFileType,
   isShippoConfigured,
+  isShippoTestMode,
+  SHIPPO_TEST_TRACKING_NUMBERS,
 } from "../lib/shippo.js";
 
 // --------------------------------------------------------------------------
@@ -127,6 +131,104 @@ export const validateAddress = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
+// Build customs items from a shipping's lines + their referenced samples.
+//
+// Each ShippingLine points to a Sample; the Sample now carries the
+// authoritative HS / Schedule B tariff code (set on the Sample submission
+// form). This helper joins them and produces an array of customs item
+// objects in the shape `createCustomsItem` expects.
+//
+// Defaults are chosen so Shippo never rejects the declaration for missing
+// fields:
+//   - quantity:     ShippingLine.quantity if > 0, else 1
+//   - description:  Sample.tariffDescription -> Sample.sampleDescription
+//                   -> ShippingLine.description -> "Laboratory sample"
+//   - net weight:   Sample.sampleMass (parsed from grams) -> 0.1 kg
+//   - value:        Sample.customsValue -> 1.00 USD
+//   - origin:       Sample.countryOrigin -> "US"
+//   - tariff#:      Sample.tariffCode (empty string if unset; that is what
+//                   triggers the validation in createShipmentForShipping)
+// --------------------------------------------------------------------------
+const parseSampleMassToKg = (raw) => {
+  if (!raw) return null;
+  // Sample.sampleMass is a free-text field; users typically enter grams.
+  // We accept "12.5", "12.5 g", "0.5 kg".
+  const match = String(raw).trim().match(/^([\d.]+)\s*(g|kg|gram|grams|kilogram|kilograms)?$/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const unit = (match[2] || "g").toLowerCase();
+  if (unit.startsWith("k")) return value;
+  return value / 1000;
+};
+
+export const buildCustomsItemsFromShipping = async (shipping) => {
+  const lines = await ShippingLine.find({ shippingId: shipping._id })
+    .populate("sampleId")
+    .lean();
+
+  return lines.map((line) => {
+    const sample = line.sampleId || {};
+    const quantity = Number(line.quantity) > 0 ? Number(line.quantity) : 1;
+    const description =
+      sample.tariffDescription ||
+      sample.sampleDescription ||
+      line.description ||
+      sample.name ||
+      "Laboratory sample";
+
+    const netWeightKg = parseSampleMassToKg(sample.sampleMass);
+    return {
+      description: String(description).slice(0, 200),
+      quantity,
+      netWeight: String(netWeightKg ?? 0.1),
+      massUnit: "kg",
+      valueAmount: String(sample.customsValue || "1.00"),
+      valueCurrency: "USD",
+      originCountry: (sample.countryOrigin || "US").toUpperCase(),
+      tariffNumber: (sample.tariffCode || "").trim(),
+      skuCode: sample.sampleCode || line.sampleCode || "",
+      // Used by the UI to deep-link "fix this sample" from the customs row.
+      sourceSampleId: sample._id ? String(sample._id) : undefined,
+      sourceSampleCode: sample.sampleCode || line.sampleCode || "",
+    };
+  });
+};
+
+// --------------------------------------------------------------------------
+// POST /api/shippo/shipping/:id/customs/auto-build
+//   Returns the customs items derived from the shipping's lines + samples.
+//   The frontend "Auto-fill from samples" button calls this so the user
+//   sees the result in the form *before* anything is sent to Shippo.
+// --------------------------------------------------------------------------
+export const autoBuildCustomsItems = async (req, res) => {
+  const companyId = requireCompany(req, res);
+  if (!companyId) return;
+  const { id } = req.params;
+  try {
+    const shipping = await loadShipping(id, companyId);
+    if (!shipping) return res.status(404).json({ message: "Shipping not found" });
+
+    const items = await buildCustomsItemsFromShipping(shipping);
+    const missing = items.filter((it) => !it.tariffNumber);
+
+    res.json({
+      items,
+      summary: {
+        total: items.length,
+        missingTariff: missing.length,
+        missingSamples: missing.map((m) => m.sourceSampleCode).filter(Boolean),
+      },
+    });
+  } catch (error) {
+    console.error("[shippo] autoBuildCustomsItems failed:", error);
+    res.status(500).json({
+      message: error.message || "Failed to auto-build customs items",
+    });
+  }
+};
+
+// --------------------------------------------------------------------------
 // POST /api/shipping/:id/shippo/shipment
 //   Create a Shippo shipment for an existing Shipping record. The response
 //   includes all available rates. Caller may pass:
@@ -206,27 +308,130 @@ export const createShipmentForShipping = async (req, res) => {
     // ------------------------------------------------------------
     // Customs declaration (international only)
     // ------------------------------------------------------------
-    // If the request supplied customs data OR we already stored
-    // customs info AND the shipment is international, create a
-    // Shippo customs declaration and attach it to the shipment.
+    // Customs source-of-truth precedence:
+    //   1. customs.items passed in this request (user manually edited)
+    //   2. customs.items previously saved on the shipping doc
+    //   3. auto-built from the shipping's lines + samples (each sample
+    //      carries its own Schedule B / HS tariff code, set on the
+    //      Sample submission form)
+    // For an international shipment we ALWAYS create a customs
+    // declaration — if the user disabled it, we re-enable it because
+    // Shippo will refuse to print international labels otherwise.
     // ------------------------------------------------------------
     const customsInput = req.body?.customs;
     const existingCustoms = shipping.customs?.toObject
       ? shipping.customs.toObject()
       : shipping.customs || {};
-    const customs = customsInput || existingCustoms;
+    let customs = customsInput || existingCustoms || {};
     const isInternational =
       (addressFrom.country || "").toUpperCase() !==
       (addressTo.country || "").toUpperCase();
 
     let customsDeclarationId;
-    if (
-      isInternational &&
-      customs &&
-      customs.enabled &&
-      Array.isArray(customs.items) &&
-      customs.items.length > 0
-    ) {
+    if (isInternational) {
+      // Auto-build items from samples when none were provided.
+      if (!Array.isArray(customs.items) || customs.items.length === 0) {
+        try {
+          const built = await buildCustomsItemsFromShipping(shipping);
+          if (built.length === 0) {
+            return res.status(400).json({
+              message:
+                "International shipment has no items to declare. Add samples to this shipping log first.",
+            });
+          }
+          customs = {
+            ...customs,
+            enabled: true,
+            contentsType: customs.contentsType || "SAMPLE",
+            nonDeliveryOption: customs.nonDeliveryOption || "RETURN",
+            certify: customs.certify !== false,
+            items: built,
+          };
+          console.log(
+            `[shippo] auto-built ${built.length} customs items from samples for shipping=${shipping._id}`
+          );
+        } catch (buildErr) {
+          console.error("[shippo] customs auto-build failed:", buildErr);
+          return res.status(500).json({
+            message: "Failed to build customs items from samples.",
+          });
+        }
+      }
+
+      // Validate every item has a tariff number — Shippo accepts blanks
+      // but most foreign customs authorities (and the carrier-printed
+      // commercial invoice) require an HS code.
+      const missing = customs.items
+        .filter((it) => !it.tariffNumber || String(it.tariffNumber).trim() === "")
+        .map((it) => it.sourceSampleCode || it.skuCode || it.description);
+      if (missing.length > 0) {
+        return res.status(400).json({
+          message:
+            `Cannot create international shipment: ${missing.length} item(s) are missing an HS / Schedule B tariff code. ` +
+            `Open each sample and set its Customs / Export Classification, then try again.`,
+          missing,
+        });
+      }
+
+      if (!customs.certifySigner || String(customs.certifySigner).trim() === "") {
+        return res.status(400).json({
+          message:
+            "International customs declaration requires a Certify Signer name on the shipping log.",
+        });
+      }
+
+      // ----------------------------------------------------------------
+      // EEL / PFC — Electronic Export Information exemption code.
+      // ----------------------------------------------------------------
+      // USPS (and most carriers) REQUIRE this on every export from the US
+      // — leaving it blank produces:
+      //   "Attribute customs_declaration.eel_pfc must not be empty."
+      // The right value depends on the origin and the per-item value:
+      //   - US -> Canada           : NOEEI_30_36   (FTR §30.36 exemption)
+      //   - US -> elsewhere, item value ≤ $2,500 per Schedule B code
+      //                            : NOEEI_30_37_a (FTR §30.37(a) low-value)
+      //   - US -> elsewhere, item value > $2,500
+      //                            : AES_ITN_<itn> (actual AES filing
+      //                              required — we cannot default this; the
+      //                              user must obtain an ITN from AESDirect)
+      // We only auto-default for US-origin shipments. If the user already
+      // typed something into the eelPfc field we never overwrite it.
+      // ----------------------------------------------------------------
+      const fromCountry = (addressFrom.country || "").toUpperCase();
+      const toCountry = (addressTo.country || "").toUpperCase();
+      if (fromCountry === "US") {
+        const provided = String(customs.eelPfc || "").trim();
+        if (!provided) {
+          const totalExceedsLowValue = customs.items.some((it) => {
+            const value = Number(it.valueAmount) || 0;
+            const qty = Number(it.quantity) || 1;
+            return value * qty > 2500;
+          });
+          if (toCountry === "CA") {
+            customs.eelPfc = "NOEEI_30_36";
+          } else if (!totalExceedsLowValue) {
+            customs.eelPfc = "NOEEI_30_37_a";
+          } else {
+            return res.status(400).json({
+              message:
+                "This US export has at least one customs item over $2,500 in value. " +
+                "An AES ITN is required — file with AESDirect (https://www.aesdirect.gov/) " +
+                "and enter the ITN as the EEL/PFC code (format: AES_ITN_<your-ITN>) on the customs declaration.",
+            });
+          }
+          console.log(
+            `[shippo] eelPfc auto-defaulted to ${customs.eelPfc} for ${fromCountry}->${toCountry}`
+          );
+        } else if (provided === "AES_ITN" || /^AES_ITN_?$/.test(provided)) {
+          // User picked "I have an AES ITN" but didn't paste the actual ITN.
+          return res.status(400).json({
+            message:
+              "AES ITN selected but no ITN value provided. Enter your AESDirect-issued ITN " +
+              "after the AES_ITN_ prefix (e.g. AES_ITN_X20250601000001).",
+          });
+        }
+      }
+
       try {
         // Create all customs items in parallel, then the declaration.
         const itemObjects = await Promise.all(
@@ -243,6 +448,7 @@ export const createShipmentForShipping = async (req, res) => {
         // Persist so we can reuse / display later.
         shipping.customs = {
           ...customs,
+          enabled: true,
           shippoCustomsDeclarationId: declaration.object_id,
           shippoCustomsItemIds: itemIds,
         };
@@ -256,6 +462,36 @@ export const createShipmentForShipping = async (req, res) => {
           message:
             customsErr.message ||
             "Failed to create customs declaration for international shipment.",
+          shippo: customsErr.shippoResponse,
+        });
+      }
+    } else if (
+      customs &&
+      customs.enabled &&
+      Array.isArray(customs.items) &&
+      customs.items.length > 0
+    ) {
+      // Domestic but user explicitly enabled customs (rare, but allowed).
+      try {
+        const itemObjects = await Promise.all(
+          customs.items.map((it) => shippoCreateCustomsItem(it))
+        );
+        const itemIds = itemObjects.map((i) => i.object_id);
+        const declaration = await shippoCreateCustomsDeclaration({
+          ...customs,
+          items: itemIds,
+        });
+        customsDeclarationId = declaration.object_id;
+        shipping.customs = {
+          ...customs,
+          shippoCustomsDeclarationId: declaration.object_id,
+          shippoCustomsItemIds: itemIds,
+        };
+      } catch (customsErr) {
+        console.error("[shippo] customs creation failed (domestic):", customsErr);
+        return res.status(400).json({
+          message:
+            customsErr.message || "Failed to create customs declaration.",
           shippo: customsErr.shippoResponse,
         });
       }
@@ -455,6 +691,11 @@ export const buyLabel = async (req, res) => {
     shipping.trackingStatus = tx.tracking_status?.status || "UNKNOWN";
 
     // Pull carrier/service info from the rate if present (Shippo expands it).
+    // We also derive `logisticsProvider` and `estimatedArrivalDate` here so
+    // the shipping log displays them automatically — these fields used to
+    // be entered by hand on the form and are no longer collected from the
+    // user.
+    let rateEstimatedDays;
     if (tx.rate) {
       try {
         let rateObj = tx.rate;
@@ -466,6 +707,14 @@ export const buyLabel = async (req, res) => {
         shipping.serviceLevelName = rateObj.servicelevel?.name;
         shipping.shippingCost = rateObj.amount;
         shipping.shippingCurrency = rateObj.currency;
+        // Mirror provider into the legacy `logisticsProvider` field for
+        // any UI / report that still reads it.
+        if (rateObj.provider) {
+          shipping.logisticsProvider = rateObj.provider;
+        }
+        if (Number.isFinite(Number(rateObj.estimated_days))) {
+          rateEstimatedDays = Number(rateObj.estimated_days);
+        }
       } catch (rateErr) {
         console.warn(`[shippo] Could not hydrate rate: ${rateErr.message}`);
       }
@@ -473,6 +722,12 @@ export const buyLabel = async (req, res) => {
 
     shipping.status = "Shipped";
     if (!shipping.shipmentDate) shipping.shipmentDate = new Date();
+    if (rateEstimatedDays != null) {
+      const eta = new Date(shipping.shipmentDate);
+      eta.setDate(eta.getDate() + rateEstimatedDays);
+      shipping.estimatedArrivalDate = eta;
+      shipping.estDate = eta;
+    }
     await shipping.save();
 
     console.log(
@@ -549,7 +804,42 @@ export const trackLabel = async (req, res) => {
       });
     }
 
-    const tracking = await shippoTrackShipment(shipping.carrier, shipping.trackingNumber);
+    // ----------------------------------------------------------------
+    // TEST-MODE TRACKING OVERRIDE (remove once SHIPPO_API_TOKEN is
+    // switched to a shippo_live_* token).
+    // ----------------------------------------------------------------
+    // Shippo's sandbox refuses live tracking against real carrier
+    // names ("dhl_express", "usps", ...) — it returns:
+    //   "DHL Express is not a valid test tracking carrier. Please use 'shippo'"
+    // To exercise the full tracking UI in test mode we swap the
+    // request to use carrier "shippo" + one of Shippo's magic test
+    // tracking numbers (e.g. "SHIPPO_TRANSIT"). The saved carrier /
+    // tracking number on the shipping document are untouched, so the
+    // moment you flip to a live token the override falls away and
+    // tracking goes through to the real carrier.
+    // ----------------------------------------------------------------
+    let trackCarrier = shipping.carrier;
+    let trackNumber = shipping.trackingNumber;
+    let testOverrideApplied = false;
+    if (isShippoTestMode()) {
+      const desired = String(process.env.SHIPPO_TEST_TRACKING_STATE || "SHIPPO_TRANSIT")
+        .trim()
+        .toUpperCase();
+      if (SHIPPO_TEST_TRACKING_NUMBERS.includes(desired)) {
+        trackCarrier = "shippo";
+        trackNumber = desired;
+        testOverrideApplied = true;
+        console.log(
+          `[shippo] test-mode tracking override active: forwarding (carrier="shippo", trackingNumber="${desired}") instead of (${shipping.carrier}, ${shipping.trackingNumber})`
+        );
+      } else {
+        console.warn(
+          `[shippo] SHIPPO_TEST_TRACKING_STATE="${desired}" is not a valid Shippo sandbox tracking number; falling back to real carrier ${shipping.carrier}. Allowed values: ${SHIPPO_TEST_TRACKING_NUMBERS.join(", ")}`
+        );
+      }
+    }
+
+    const tracking = await shippoTrackShipment(trackCarrier, trackNumber);
 
     const latest = tracking.tracking_status || {};
     shipping.trackingStatus = latest.status || shipping.trackingStatus;
@@ -578,14 +868,23 @@ export const trackLabel = async (req, res) => {
     await shipping.save();
 
     res.json({
-      carrier: tracking.carrier,
-      trackingNumber: tracking.tracking_number,
+      // Always echo the real carrier + tracking number the user expects
+      // to see, even when the underlying lookup was redirected through
+      // Shippo's test tracking endpoint.
+      carrier: shipping.carrier,
+      trackingNumber: shipping.trackingNumber,
       trackingUrlProvider: tracking.tracking_url_provider,
       eta: tracking.eta,
       tracking_status: latest,
       tracking_history: tracking.tracking_history || [],
       servicelevel: tracking.servicelevel,
       metadata: tracking.metadata,
+      // Lets the UI render a "Simulated tracking (test mode)" banner so
+      // QA isn't confused about why a never-mailed package shows
+      // transit events. Removed automatically once the live token is in.
+      testOverride: testOverrideApplied
+        ? { active: true, state: process.env.SHIPPO_TEST_TRACKING_STATE }
+        : undefined,
     });
   } catch (error) {
     sendShippoError(res, error);
@@ -632,4 +931,5 @@ export default {
   getLabel,
   trackLabel,
   refundShippingLabel,
+  autoBuildCustomsItems,
 };

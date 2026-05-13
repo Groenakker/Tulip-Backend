@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "data:load-schedule-b": "node scripts/loadScheduleB.js"
   },
   "type": "module",
   "dependencies": {
