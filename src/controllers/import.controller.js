@@ -321,7 +321,12 @@ export const importBusinessPartners = async (req, res) => {
           existing.contacts = mergeContact(existing.contacts, payload.contact);
         }
         existing.updatedBy = userId;
-        await existing.save();
+        // validateModifiedOnly so legacy data on the document (e.g. an old
+        // contact with a malformed email saved before the validators were
+        // added) can't block the fields the import is actually trying to
+        // write. Without this, a single stale field would mark the entire
+        // row as "failed" and the imported phone / address would be lost.
+        await existing.save({ validateModifiedOnly: true });
         results.push({
           row: rowIndex,
           partnerNumber,
@@ -503,7 +508,7 @@ export const importProjects = async (req, res) => {
         if (payload.endDate) existing.endDate = payload.endDate;
         existing.status = payload.status;
         existing.updatedBy = userId;
-        await existing.save();
+        await existing.save({ validateModifiedOnly: true });
         results.push({
           row: rowIndex,
           projectID,
@@ -639,7 +644,7 @@ export const importTestCodes = async (req, res) => {
           existing.turnAroundTime = payload.turnAroundTime;
         }
         existing.updatedBy = userId;
-        await existing.save();
+        await existing.save({ validateModifiedOnly: true });
         results.push({
           row: rowIndex,
           code,
