@@ -10,12 +10,19 @@ import {
   addShippingAddress,
   updateShippingAddress,
   deleteShippingAddress,
+  getCompanyShippoConfig,
+  updateCompanyShippoConfig,
 } from "../controllers/company.controller.js";
+import { verifyToken } from "../lib/utils.js";
 
 const router = express.Router();
 
 router.get("/", getCompanies);
 router.get("/:id/users", getCompanyUsers);
+
+// Per-company Shippo credentials (Settings > System Configuration)
+router.get("/:id/shippo-config", verifyToken, getCompanyShippoConfig);
+router.put("/:id/shippo-config", verifyToken, updateCompanyShippoConfig);
 
 // Shipping addresses (multi) — used by Settings > Company and picked up
 // by the Shippo Ship-From dropdown on Shipping Details.

@@ -11,24 +11,11 @@ import Bpartner from "../models/bPartners.models.js";
 import ShippingLine from "../models/shippingLines.models.js";
 import Sample from "../models/samples.models.js";
 import {
-  createShipment as shippoCreateShipment,
-  createTransaction as shippoCreateTransaction,
-  retrieveShipment as shippoRetrieveShipment,
-  retrieveTransaction as shippoRetrieveTransaction,
-  retrieveRate as shippoRetrieveRate,
-  trackShipment as shippoTrackShipment,
-  refundLabel as shippoRefundLabel,
-  validateAddress as shippoValidateAddress,
-  listCarrierAccounts as shippoListCarrierAccounts,
-  createCustomsItem as shippoCreateCustomsItem,
-  createCustomsDeclaration as shippoCreateCustomsDeclaration,
+  createShippoClient,
   getDefaultFromAddress,
-  getDefaultParcel,
-  getDefaultLabelFileType,
-  isShippoConfigured,
-  isShippoTestMode,
   SHIPPO_TEST_TRACKING_NUMBERS,
 } from "../lib/shippo.js";
+import { loadCompanyShippoConfig } from "../lib/companyShippo.js";
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -41,6 +28,11 @@ const requireCompany = (req, res) => {
     return null;
   }
   return companyId;
+};
+
+const getShippoClientForCompany = async (companyId) => {
+  const companyConfig = await loadCompanyShippoConfig(companyId);
+  return createShippoClient(companyConfig);
 };
 
 const sendShippoError = (res, error) => {
@@ -83,12 +75,17 @@ const partnerToAddress = (partner) => {
 //   Never leaks the API token.
 // --------------------------------------------------------------------------
 export const getShippoConfig = async (req, res) => {
+  const companyId = requireCompany(req, res);
+  if (!companyId) return;
+
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     res.json({
-      configured: isShippoConfigured(),
+      configured: shippo.isShippoConfigured(),
       defaultFromAddress: getDefaultFromAddress(),
-      defaultParcel: getDefaultParcel(),
-      labelFileType: getDefaultLabelFileType(),
+      defaultParcel: shippo.getDefaultParcel(),
+      labelFileType: shippo.getDefaultLabelFileType(),
+      isTestMode: shippo.isShippoTestMode(),
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load Shippo config", error: error.message });
@@ -100,8 +97,12 @@ export const getShippoConfig = async (req, res) => {
 //   List carrier accounts linked to the Shippo account (for display only).
 // --------------------------------------------------------------------------
 export const listCarriers = async (req, res) => {
+  const companyId = requireCompany(req, res);
+  if (!companyId) return;
+
   try {
-    const data = await shippoListCarrierAccounts();
+    const shippo = await getShippoClientForCompany(companyId);
+    const data = await shippo.listCarrierAccounts();
     res.json({
       carriers: (data?.results || []).map((c) => ({
         object_id: c.object_id,
@@ -122,8 +123,12 @@ export const listCarriers = async (req, res) => {
 //   Proxy to Shippo's address validation endpoint.
 // --------------------------------------------------------------------------
 export const validateAddress = async (req, res) => {
+  const companyId = requireCompany(req, res);
+  if (!companyId) return;
+
   try {
-    const result = await shippoValidateAddress(req.body || {});
+    const shippo = await getShippoClientForCompany(companyId);
+    const result = await shippo.validateAddress(req.body || {});
     res.json(result);
   } catch (error) {
     sendShippoError(res, error);
@@ -206,6 +211,7 @@ export const autoBuildCustomsItems = async (req, res) => {
   if (!companyId) return;
   const { id } = req.params;
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
 
@@ -242,6 +248,7 @@ export const createShipmentForShipping = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
 
@@ -285,12 +292,12 @@ export const createShipmentForShipping = async (req, res) => {
     if (!addressFrom.street1 || !addressFrom.zip) {
       return res.status(400).json({
         message:
-          "Ship-from address is incomplete. Configure SHIPPO_FROM_* in the backend .env or pass addressFrom in the request.",
+          "Ship-from address is incomplete. Add a shipping address under Settings > Company or pass addressFrom in the request.",
       });
     }
 
     // Parcel: body override, else stored parcel, else env default
-    const parcel = req.body?.parcel || shipping.parcel || getDefaultParcel();
+    const parcel = req.body?.parcel || shipping.parcel || shippo.getDefaultParcel();
     for (const key of ["length", "width", "height", "weight"]) {
       if (!parcel[key] || String(parcel[key]).trim() === "") {
         return res.status(400).json({
@@ -435,11 +442,11 @@ export const createShipmentForShipping = async (req, res) => {
       try {
         // Create all customs items in parallel, then the declaration.
         const itemObjects = await Promise.all(
-          customs.items.map((it) => shippoCreateCustomsItem(it))
+          customs.items.map((it) => shippo.createCustomsItem(it))
         );
         const itemIds = itemObjects.map((i) => i.object_id);
 
-        const declaration = await shippoCreateCustomsDeclaration({
+        const declaration = await shippo.createCustomsDeclaration({
           ...customs,
           items: itemIds,
         });
@@ -474,10 +481,10 @@ export const createShipmentForShipping = async (req, res) => {
       // Domestic but user explicitly enabled customs (rare, but allowed).
       try {
         const itemObjects = await Promise.all(
-          customs.items.map((it) => shippoCreateCustomsItem(it))
+          customs.items.map((it) => shippo.createCustomsItem(it))
         );
         const itemIds = itemObjects.map((i) => i.object_id);
-        const declaration = await shippoCreateCustomsDeclaration({
+        const declaration = await shippo.createCustomsDeclaration({
           ...customs,
           items: itemIds,
         });
@@ -497,7 +504,7 @@ export const createShipmentForShipping = async (req, res) => {
       }
     }
 
-    const shippoResp = await shippoCreateShipment({
+    const shippoResp = await shippo.createShipment({
       addressFrom,
       addressTo,
       parcels: [parcel],
@@ -562,6 +569,7 @@ export const refreshRates = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
     if (!shipping.shippoShipmentId) {
@@ -570,7 +578,7 @@ export const refreshRates = async (req, res) => {
       });
     }
 
-    const resp = await shippoRetrieveShipment(shipping.shippoShipmentId);
+    const resp = await shippo.retrieveShipment(shipping.shippoShipmentId);
     res.json({
       shippoShipmentId: resp.object_id,
       status: resp.status,
@@ -617,13 +625,13 @@ const formatShippoMessages = (messages) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const waitForTransaction = async (transactionId, { maxAttempts = 10, delayMs = 1500 } = {}) => {
+const waitForTransaction = async (shippo, transactionId, { maxAttempts = 10, delayMs = 1500 } = {}) => {
   let last = null;
   for (let i = 0; i < maxAttempts; i++) {
     // eslint-disable-next-line no-await-in-loop
     await sleep(delayMs);
     // eslint-disable-next-line no-await-in-loop
-    last = await shippoRetrieveTransaction(transactionId);
+    last = await shippo.retrieveTransaction(transactionId);
     if (last.status === "SUCCESS" || last.status === "ERROR") return last;
   }
   return last;
@@ -640,14 +648,15 @@ export const buyLabel = async (req, res) => {
   }
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
 
     console.log(
-      `[shippo] buyLabel shipping=${shipping._id} rateId=${rateId} labelFileType=${labelFileType || getDefaultLabelFileType()}`
+      `[shippo] buyLabel shipping=${shipping._id} rateId=${rateId} labelFileType=${labelFileType || shippo.getDefaultLabelFileType()}`
     );
 
-    let tx = await shippoCreateTransaction({
+    let tx = await shippo.createTransaction({
       rateId,
       labelFileType,
       metadata: shipping.shippingCode || String(shipping._id),
@@ -662,7 +671,7 @@ export const buyLabel = async (req, res) => {
     // we get a terminal state.
     if ((tx.status === "QUEUED" || tx.status === "WAITING") && tx.object_id) {
       console.log(`[shippo] transaction ${tx.object_id} is ${tx.status}, polling...`);
-      tx = await waitForTransaction(tx.object_id);
+      tx = await waitForTransaction(shippo, tx.object_id);
       console.log(`[shippo] polled status=${tx?.status} messages=${JSON.stringify(tx?.messages || [])}`);
     }
 
@@ -684,7 +693,7 @@ export const buyLabel = async (req, res) => {
     shipping.shippoRateId = rateId;
     shipping.shippoTransactionId = tx.object_id;
     shipping.labelUrl = tx.label_url;
-    shipping.labelFileType = tx.label_file_type || labelFileType || getDefaultLabelFileType();
+    shipping.labelFileType = tx.label_file_type || labelFileType || shippo.getDefaultLabelFileType();
     shipping.commercialInvoiceUrl = tx.commercial_invoice_url;
     shipping.trackingNumber = tx.tracking_number;
     shipping.trackingUrlProvider = tx.tracking_url_provider;
@@ -700,7 +709,7 @@ export const buyLabel = async (req, res) => {
       try {
         let rateObj = tx.rate;
         if (typeof rateObj === "string") {
-          rateObj = await shippoRetrieveRate(rateObj);
+          rateObj = await shippo.retrieveRate(rateObj);
         }
         shipping.carrier = rateObj.provider;
         shipping.serviceLevel = rateObj.servicelevel?.token;
@@ -763,13 +772,14 @@ export const getLabel = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
     if (!shipping.shippoTransactionId) {
       return res.status(404).json({ message: "No label has been purchased for this shipping." });
     }
 
-    const tx = await shippoRetrieveTransaction(shipping.shippoTransactionId);
+    const tx = await shippo.retrieveTransaction(shipping.shippoTransactionId);
     if (tx.label_url) {
       shipping.labelUrl = tx.label_url;
       await shipping.save();
@@ -796,6 +806,7 @@ export const trackLabel = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
     if (!shipping.carrier || !shipping.trackingNumber) {
@@ -821,8 +832,8 @@ export const trackLabel = async (req, res) => {
     let trackCarrier = shipping.carrier;
     let trackNumber = shipping.trackingNumber;
     let testOverrideApplied = false;
-    if (isShippoTestMode()) {
-      const desired = String(process.env.SHIPPO_TEST_TRACKING_STATE || "SHIPPO_TRANSIT")
+    if (shippo.isShippoTestMode()) {
+      const desired = String(shippo.config.testTrackingState || "SHIPPO_TRANSIT")
         .trim()
         .toUpperCase();
       if (SHIPPO_TEST_TRACKING_NUMBERS.includes(desired)) {
@@ -834,12 +845,12 @@ export const trackLabel = async (req, res) => {
         );
       } else {
         console.warn(
-          `[shippo] SHIPPO_TEST_TRACKING_STATE="${desired}" is not a valid Shippo sandbox tracking number; falling back to real carrier ${shipping.carrier}. Allowed values: ${SHIPPO_TEST_TRACKING_NUMBERS.join(", ")}`
+          `[shippo] testTrackingState="${desired}" is not a valid Shippo sandbox tracking number; falling back to real carrier ${shipping.carrier}. Allowed values: ${SHIPPO_TEST_TRACKING_NUMBERS.join(", ")}`
         );
       }
     }
 
-    const tracking = await shippoTrackShipment(trackCarrier, trackNumber);
+    const tracking = await shippo.trackShipment(trackCarrier, trackNumber);
 
     const latest = tracking.tracking_status || {};
     shipping.trackingStatus = latest.status || shipping.trackingStatus;
@@ -883,7 +894,7 @@ export const trackLabel = async (req, res) => {
       // QA isn't confused about why a never-mailed package shows
       // transit events. Removed automatically once the live token is in.
       testOverride: testOverrideApplied
-        ? { active: true, state: process.env.SHIPPO_TEST_TRACKING_STATE }
+        ? { active: true, state: shippo.config.testTrackingState }
         : undefined,
     });
   } catch (error) {
@@ -901,13 +912,14 @@ export const refundShippingLabel = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const shippo = await getShippoClientForCompany(companyId);
     const shipping = await loadShipping(id, companyId);
     if (!shipping) return res.status(404).json({ message: "Shipping not found" });
     if (!shipping.shippoTransactionId) {
       return res.status(400).json({ message: "No label to refund." });
     }
 
-    const refund = await shippoRefundLabel(shipping.shippoTransactionId);
+    const refund = await shippo.refundLabel(shipping.shippoTransactionId);
     shipping.refundId = refund.object_id;
     shipping.refundStatus = refund.status;
     if (refund.status === "SUCCESS" || refund.status === "QUEUED") {

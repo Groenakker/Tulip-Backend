@@ -1,6 +1,7 @@
 import express from "express";
 import { getAllProjects, getProjectById, createProject, updateProject, deleteProject } from "../controllers/project.controller.js";
-import { uploadProjectImage, handleMulterError } from "../middleware/upload.middleware.js";
+import { importProjects } from "../controllers/import.controller.js";
+import { uploadProjectImage, uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
 
@@ -10,6 +11,14 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Projects", "read"), getAllProjects);
+
+router.post(
+  "/import",
+  checkPermission("Projects", "write"),
+  uploadImportFile,
+  handleMulterError,
+  importProjects
+);
 
 router.get("/:id", checkPermission("Projects", "read"), getProjectById);
 

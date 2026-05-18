@@ -8,6 +8,39 @@ import mongoose from "mongoose";
 // a Shippo label: the user picks one from a dropdown instead
 // of retyping the full address every time.
 // ============================================================
+const shippoConfigSchema = new mongoose.Schema(
+  {
+    apiToken: { type: String, trim: true, select: false },
+    apiVersion: { type: String, trim: true, default: "" },
+    labelFileType: {
+      type: String,
+      enum: ["PDF", "PDF_4x6", "PDF_4x8", "PNG", "PNG_2.3x7.5", "ZPLII"],
+      default: "PDF_4x6",
+    },
+    defaultParcelLength: { type: String, default: "10" },
+    defaultParcelWidth: { type: String, default: "8" },
+    defaultParcelHeight: { type: String, default: "4" },
+    defaultParcelDistanceUnit: { type: String, enum: ["in", "cm"], default: "in" },
+    defaultParcelWeight: { type: String, default: "2" },
+    defaultParcelMassUnit: { type: String, enum: ["lb", "oz", "kg", "g"], default: "lb" },
+    testTrackingState: {
+      type: String,
+      enum: [
+        "",
+        "SHIPPO_PRE_TRANSIT",
+        "SHIPPO_TRANSIT",
+        "SHIPPO_DELIVERED",
+        "SHIPPO_RETURNED",
+        "SHIPPO_FAILURE",
+        "SHIPPO_UNKNOWN",
+      ],
+      default: "SHIPPO_TRANSIT",
+    },
+    enabled: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const shippingAddressSchema = new mongoose.Schema(
   {
     label: { type: String, trim: true, required: true }, // e.g. "Main Warehouse"
@@ -59,6 +92,10 @@ const companySchema = new mongoose.Schema(
     shippingAddresses: {
       type: [shippingAddressSchema],
       default: [],
+    },
+    shippoConfig: {
+      type: shippoConfigSchema,
+      default: () => ({}),
     },
     profile_img: {
       type: String,

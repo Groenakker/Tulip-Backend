@@ -68,3 +68,40 @@ export const uploadDocumentFile = uploadDocument.array('file', MAX_DOCUMENT_FILE
 // Single file for add version
 export const uploadSingleDocumentFile = uploadDocument.single('file');
 
+// ============================================================
+// Excel imports (BP Master, Projects List, Items Master)
+// ------------------------------------------------------------
+// Accepts a single .xlsx / .xls / .csv file under the field name
+// "file". Stored in memory so the import controller can hand it
+// directly to the xlsx parser.
+// ============================================================
+const spreadsheetMimeTypes = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-excel.sheet.macroenabled.12',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'text/csv',
+  'application/csv',
+  'application/octet-stream',
+]);
+
+const spreadsheetExtensions = ['.xlsx', '.xls', '.xlsm', '.csv', '.ods'];
+
+const spreadsheetFilter = (req, file, cb) => {
+  const ext = (file.originalname || '').toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
+  const extOk = spreadsheetExtensions.some((e) => ext.endsWith(e));
+  if (extOk || spreadsheetMimeTypes.has(mime)) {
+    return cb(null, true);
+  }
+  cb(new Error('Unsupported file type. Please upload an Excel (.xlsx) or CSV file.'), false);
+};
+
+const uploadSpreadsheet = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: spreadsheetFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
+export const uploadImportFile = uploadSpreadsheet.single('file');
+

@@ -1,5 +1,29 @@
 import Company from "../models/company.models.js";
 import User from "../models/user.models.js";
+import {
+  formatShippoConfigResponse,
+  loadCompanyShippoConfig,
+  sanitizeShippoConfigInput,
+  validateApiToken,
+} from "../lib/companyShippo.js";
+
+const assertCompanyAccess = async (req, res, companyId) => {
+  if (!req.user?.company_id && req.userId) {
+    const user = await User.findById(req.userId).select("company_id");
+    if (user) req.user = user;
+  }
+
+  const userCompanyId = req.user?.company_id ? String(req.user.company_id) : null;
+  if (!userCompanyId) {
+    res.status(403).json({ message: "Invalid tenant context" });
+    return false;
+  }
+  if (String(companyId) !== userCompanyId) {
+    res.status(403).json({ message: "You can only manage your own company settings." });
+    return false;
+  }
+  return true;
+};
 
 export const getCompanies = async (req, res) => {
   try {
@@ -352,7 +376,6 @@ export const deleteShippingAddress = async (req, res) => {
     const wasDefault = target.isDefault;
     target.deleteOne();
 
-    // If we removed the default, promote the first remaining address.
     if (wasDefault && company.shippingAddresses.length > 0) {
       company.shippingAddresses[0].isDefault = true;
     }
@@ -366,6 +389,78 @@ export const deleteShippingAddress = async (req, res) => {
     res
       .status(500)
       .json({ message: "Failed to delete shipping address", error: error.message });
+  }
+};
+
+// ============================================================
+// Shippo configuration — per-company API credentials
+// ------------------------------------------------------------
+// Stored on the company document so each tenant can use their own
+// Shippo account. The API token is never returned in full.
+// ============================================================
+
+export const getCompanyShippoConfig = async (req, res) => {
+  const { id } = req.params;
+  if (!(await assertCompanyAccess(req, res, id))) return;
+
+  try {
+    const companyConfig = await loadCompanyShippoConfig(id);
+    res.json(formatShippoConfigResponse(companyConfig));
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to fetch Shippo configuration", error: error.message });
+  }
+};
+
+export const updateCompanyShippoConfig = async (req, res) => {
+  const { id } = req.params;
+  if (!(await assertCompanyAccess(req, res, id))) return;
+
+  const updates = sanitizeShippoConfigInput(req.body || {});
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: "No valid Shippo configuration fields provided." });
+  }
+
+  if (updates.apiToken) {
+    const tokenError = validateApiToken(updates.apiToken);
+    if (tokenError) {
+      return res.status(400).json({ message: tokenError });
+    }
+    updates.enabled = true;
+  }
+
+  try {
+    const company = await Company.findById(id).select("+shippoConfig.apiToken shippoConfig");
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    company.shippoConfig = {
+      ...(company.shippoConfig?.toObject ? company.shippoConfig.toObject() : company.shippoConfig || {}),
+      ...updates,
+    };
+
+    if (req.user?._id) {
+      company.updatedBy = req.user._id;
+    }
+
+    await company.save();
+
+    const saved = company.shippoConfig?.toObject
+      ? company.shippoConfig.toObject()
+      : company.shippoConfig;
+    res.json(formatShippoConfigResponse(saved));
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "Invalid company ID" });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to update Shippo configuration", error: error.message });
   }
 };
 

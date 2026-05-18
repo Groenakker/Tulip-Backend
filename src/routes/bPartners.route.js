@@ -1,5 +1,7 @@
 import express from "express";
 import { getAllPartners, getPartnerById, createPartner, updatePartner, deletePartner, getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode } from "../controllers/bPartner.controller.js";
+import { importBusinessPartners } from "../controllers/import.controller.js";
+import { uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
 
@@ -9,6 +11,14 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Business Partners", "read"), getAllPartners);
+
+router.post(
+  "/import",
+  checkPermission("Business Partners", "write"),
+  uploadImportFile,
+  handleMulterError,
+  importBusinessPartners
+);
 
 router.get("/:id", checkPermission("Business Partners", "read"), getPartnerById);
 

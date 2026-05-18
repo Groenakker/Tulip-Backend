@@ -1,5 +1,7 @@
 import express from "express";
 import { getAllTestCodes, getTestCodeById, createTestCode, updateTestCode, deleteTestCode } from "../controllers/testCode.controller.js";
+import { importTestCodes } from "../controllers/import.controller.js";
+import { uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
 
@@ -9,6 +11,14 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Test Codes", "read"), getAllTestCodes);
+
+router.post(
+  "/import",
+  checkPermission("Test Codes", "write"),
+  uploadImportFile,
+  handleMulterError,
+  importTestCodes
+);
 
 router.get("/:id", checkPermission("Test Codes", "read"), getTestCodeById);
 
