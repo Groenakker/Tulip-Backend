@@ -5,6 +5,7 @@ import {
   createDocument,
   updateDocument,
   deleteDocument,
+  bulkDeleteDocuments,
   getDocumentVersions,
   addDocumentVersion,
   updateDocumentVersion,
@@ -23,7 +24,6 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Documents", "read"), getAllDocuments);
-router.get("/:id", checkPermission("Documents", "read"), getDocumentById);
 router.post(
   "/",
   checkPermission("Documents", "write"),
@@ -31,6 +31,16 @@ router.post(
   handleMulterError,
   createDocument
 );
+
+// Bulk delete (must be declared before any "/:id" routes).
+// Skips Published / Archived documents to mirror single-delete behavior.
+router.post(
+  "/bulk-delete",
+  checkPermission("Documents", "delete"),
+  bulkDeleteDocuments
+);
+
+router.get("/:id", checkPermission("Documents", "read"), getDocumentById);
 router.put("/:id", checkPermission("Documents", "update"), updateDocument);
 router.delete("/:id", checkPermission("Documents", "delete"), deleteDocument);
 

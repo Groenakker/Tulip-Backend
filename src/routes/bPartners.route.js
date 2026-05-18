@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllPartners, getPartnerById, createPartner, updatePartner, deletePartner, getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode } from "../controllers/bPartner.controller.js";
+import { getAllPartners, getPartnerById, createPartner, updatePartner, deletePartner, bulkDeletePartners, getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode } from "../controllers/bPartner.controller.js";
 import { importBusinessPartners } from "../controllers/import.controller.js";
 import { uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
@@ -23,6 +23,11 @@ router.post(
 router.get("/:id", checkPermission("Business Partners", "read"), getPartnerById);
 
 router.post("/", checkPermission("Business Partners", "write"), createPartner);
+
+// Bulk delete must be declared before the "/:id" routes so Express doesn't
+// treat the literal segment "bulk-delete" as an :id param. Same delete
+// permission as the single-record delete so it stays consistent with RBAC.
+router.post("/bulk-delete", checkPermission("Business Partners", "delete"), bulkDeletePartners);
 
 router.post("/:id/contacts", checkPermission("Business Partners", "update"), addPartnerContact);
 

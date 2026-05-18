@@ -1,6 +1,42 @@
 import Document from "../models/documents.models.js";
 import DocumentVersion from "../models/documentVersions.models.js";
 import DocumentReview from "../models/documentReviews.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete documents (POST /api/documents/bulk-delete).
+//
+// Mirrors single deleteDocument behavior:
+//   • Published / Archived documents cannot be deleted (kept for audit).
+//   • After deleting the documents themselves, their versions and reviews
+//     are also removed so the tenant doesn't accumulate orphan records.
+export const bulkDeleteDocuments = createBulkDelete(Document, {
+  entityName: "document",
+  preDelete: async (validIds, { companyId }) => {
+    // Filter out documents that are Published or Archived (or that the
+    // tenant doesn't own). Returning the allowlist tells the factory which
+    // IDs to actually deleteMany on.
+    const deletable = await Document.find({
+      _id: { $in: validIds },
+      company_id: companyId,
+      status: { $nin: ["Published", "Archived"] },
+    })
+      .select("_id")
+      .lean();
+    return deletable.map((d) => String(d._id));
+  },
+  afterDelete: async (deletedIds, { companyId }) => {
+    await Promise.all([
+      DocumentVersion.deleteMany({
+        documentId: { $in: deletedIds },
+        company_id: companyId,
+      }),
+      DocumentReview.deleteMany({
+        documentId: { $in: deletedIds },
+        company_id: companyId,
+      }),
+    ]);
+  },
+});
 import { uploadFileToSupabase } from "../lib/supabase.js";
 import { sendDocumentStakeholderEmail } from "../utils/mailer.js";
 import { createStakeholderApprovalToken } from "../utils/stakeholderApprovalToken.js";

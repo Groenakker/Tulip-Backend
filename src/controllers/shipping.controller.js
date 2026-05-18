@@ -1,5 +1,19 @@
 import Shipping from "../models/shipping.models.js";
 import ShippingLine from "../models/shippingLines.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete shipping records (POST /api/shipping/bulk-delete).
+// Also cleans up child shipping lines for each deleted shipment so the
+// database doesn't end up with orphaned line items.
+export const bulkDeleteShipping = createBulkDelete(Shipping, {
+  entityName: "shipment",
+  afterDelete: async (deletedIds, { companyId }) => {
+    await ShippingLine.deleteMany({
+      shippingId: { $in: deletedIds },
+      ...(companyId ? { company_id: companyId } : {}),
+    });
+  },
+});
 
 
 export const getAllShipping = async (req, res) => {

@@ -1,5 +1,11 @@
 import Warehouse from "../models/warehouses.models.js";
 import Instance from "../models/instances.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete warehouses (POST /api/warehouses/bulk-delete).
+export const bulkDeleteWarehouses = createBulkDelete(Warehouse, {
+  entityName: "warehouse",
+});
 
 function computeSpaceStatus(occupied, capacity) {
   if (occupied === 0) return "Empty";

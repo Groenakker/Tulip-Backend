@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllTestCodes, getTestCodeById, createTestCode, updateTestCode, deleteTestCode } from "../controllers/testCode.controller.js";
+import { getAllTestCodes, getTestCodeById, createTestCode, updateTestCode, deleteTestCode, bulkDeleteTestCodes } from "../controllers/testCode.controller.js";
 import { importTestCodes } from "../controllers/import.controller.js";
 import { uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
@@ -23,6 +23,9 @@ router.post(
 router.get("/:id", checkPermission("Test Codes", "read"), getTestCodeById);
 
 router.post("/", checkPermission("Test Codes", "write"), createTestCode);
+
+// Bulk delete (declared before "/:id" so "bulk-delete" isn't captured as an id).
+router.post("/bulk-delete", checkPermission("Test Codes", "delete"), bulkDeleteTestCodes);
 
 router.put("/:id", checkPermission("Test Codes", "update"), updateTestCode);
 

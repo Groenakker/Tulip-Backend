@@ -126,21 +126,74 @@ const summarizeImport = (results) => ({
 // ----------------------------------------------------------------------------
 // POST /api/bpartners/import
 // ----------------------------------------------------------------------------
-// Expected columns (BP Master Data.xlsx):
-//   BP Code              -> partnerNumber  (required)
-//   BP Name              -> name           (required)
-//   Account Balance      -> ignored
-//   Payment Terms Code   -> ignored
-//   BP Currency          -> ignored
+// Expected columns (BP Master Data , Contact , Address, Phone.xlsx):
+//   BP Code            -> partnerNumber  (required)
+//   BP Name            -> name           (required)
+//   BP Type            -> category       ("C" = Client, "S" / "V" = Vendor)
+//   Bill-to Street     -> address1
+//   Bill-to Zip Code   -> zip
+//   Ship-to Street     -> address2       (only kept when different from bill-to)
+//   Ship-to Zip Code   -> appended to address2 if shipping differs
+//   Telephone 1        -> phone          (primary partner phone)
+//   Telephone 2        -> contact phone  (falls back to partner phone if 1 empty)
+//   Fax Number         -> ignored
+//   Contact Person     -> contacts[]     (added as a single contact entry)
 //
-// Category is inferred from the BP Code prefix:
-//   "C..." -> Client, "V..." -> Vendor, anything else -> Client (default).
+// Older "BP Master Data.xlsx" exports without the extra columns continue to
+// work — every column above is optional except BP Code and BP Name.
 // ----------------------------------------------------------------------------
-const inferPartnerCategory = (code) => {
+
+// Strip out anything that isn't a valid phone character so we don't trigger
+// the model's phone regex with stray punctuation from spreadsheet exports.
+const cleanPhone = (value) => {
+  const raw = cleanString(value);
+  if (!raw) return "";
+  const filtered = raw.replace(/[^\d\s\-+()]/g, "").trim();
+  return filtered;
+};
+
+// Map the explicit "BP Type" column to a partner category. Falls back to the
+// BP Code prefix (C... -> Client, V/S... -> Vendor) when the column is blank.
+const resolvePartnerCategory = (bpType, code) => {
+  const t = cleanString(bpType).toUpperCase();
+  if (t === "C") return "Client";
+  if (t === "S" || t === "V") return "Vendor";
+  // Some exports use full words.
+  if (t === "CLIENT" || t === "CUSTOMER") return "Client";
+  if (t === "VENDOR" || t === "SUPPLIER") return "Vendor";
+
   const c = cleanString(code).toUpperCase();
-  if (c.startsWith("V")) return "Vendor";
-  if (c.startsWith("S")) return "Vendor"; // some files use S = Supplier
+  if (c.startsWith("V") || c.startsWith("S")) return "Vendor";
   return "Client";
+};
+
+// Combine ship-to street + zip into a single address2 line, only when it
+// actually differs from the bill-to address (otherwise it's pointless noise).
+const buildShipToAddress = (shipStreet, shipZip, billStreet, billZip) => {
+  const ss = cleanString(shipStreet);
+  const sz = cleanString(shipZip);
+  if (!ss && !sz) return "";
+
+  const sameStreet = ss && billStreet && ss.toLowerCase() === cleanString(billStreet).toLowerCase();
+  const sameZip = sz && billZip && sz === cleanString(billZip);
+  if (sameStreet && sameZip) return "";
+
+  return [ss, sz].filter(Boolean).join(", ");
+};
+
+// Merge the imported contact into the existing contacts list without
+// creating duplicates. We match on (case-insensitive) name + phone so
+// re-importing the same file is idempotent.
+const mergeContact = (existingContacts, newContact) => {
+  if (!newContact || !newContact.name) return existingContacts || [];
+  const list = Array.isArray(existingContacts) ? [...existingContacts] : [];
+  const exists = list.some((c) => {
+    const sameName = (c.name || "").trim().toLowerCase() === newContact.name.trim().toLowerCase();
+    const samePhone = (c.phone || "") === (newContact.phone || "");
+    return sameName && samePhone;
+  });
+  if (!exists) list.push(newContact);
+  return list;
 };
 
 export const importBusinessPartners = async (req, res) => {
@@ -184,12 +237,50 @@ export const importBusinessPartners = async (req, res) => {
       continue;
     }
 
-    const category = inferPartnerCategory(partnerNumber);
+    const bpType = pickField(row, ["BP Type", "Bp Type", "Type", "Category"]);
+    const billStreet = cleanString(
+      pickField(row, ["Bill-to Street", "Bill To Street", "Billing Street", "Billing Address", "Address 1", "Address1"])
+    );
+    const billZip = cleanString(
+      pickField(row, ["Bill-to Zip Code", "Bill To Zip Code", "Bill-to Zip", "Bill To Zip", "Billing Zip", "Zip", "Zip Code", "Postal Code"])
+    );
+    const shipStreet = cleanString(
+      pickField(row, ["Ship-to Street", "Ship To Street", "Shipping Street", "Shipping Address", "Address 2", "Address2"])
+    );
+    const shipZip = cleanString(
+      pickField(row, ["Ship-to Zip Code", "Ship To Zip Code", "Ship-to Zip", "Ship To Zip", "Shipping Zip"])
+    );
+    const tel1 = cleanPhone(pickField(row, ["Telephone 1", "Telephone1", "Phone 1", "Phone", "Telephone"]));
+    const tel2 = cleanPhone(pickField(row, ["Telephone 2", "Telephone2", "Phone 2", "Mobile", "Cell"]));
+    const contactPerson = cleanString(
+      pickField(row, ["Contact Person", "Contact Name", "Contact", "Primary Contact"])
+    );
+
+    const category = resolvePartnerCategory(bpType, partnerNumber);
+    const address1 = billStreet;
+    const address2 = buildShipToAddress(shipStreet, shipZip, billStreet, billZip);
+    const zip = billZip;
+    // Primary phone goes on the partner; secondary phone (if any) goes on the
+    // contact entry so we don't lose information.
+    const partnerPhone = tel1 || tel2;
+    const contactPhone = tel1 && tel2 ? tel2 : "";
+    const contact = contactPerson
+      ? {
+          name: contactPerson,
+          phone: contactPhone || partnerPhone || undefined,
+        }
+      : null;
+
     const payload = {
       partnerNumber,
       name,
       category,
       status: "Active",
+      address1: address1 || undefined,
+      address2: address2 || undefined,
+      zip: zip || undefined,
+      phone: partnerPhone || undefined,
+      contact, // singular new contact (may be null); applied during create/update
       company_id: companyId,
       createdBy: userId,
       updatedBy: userId,
@@ -220,6 +311,15 @@ export const importBusinessPartners = async (req, res) => {
 
         existing.name = payload.name;
         existing.category = payload.category;
+        // Only overwrite address / phone fields when the import actually
+        // provides a value — never wipe out manually-entered data.
+        if (payload.address1) existing.address1 = payload.address1;
+        if (payload.address2) existing.address2 = payload.address2;
+        if (payload.zip) existing.zip = payload.zip;
+        if (payload.phone) existing.phone = payload.phone;
+        if (payload.contact) {
+          existing.contacts = mergeContact(existing.contacts, payload.contact);
+        }
         existing.updatedBy = userId;
         await existing.save();
         results.push({
@@ -229,7 +329,14 @@ export const importBusinessPartners = async (req, res) => {
           action: "updated",
         });
       } else {
-        await Bpartner.create(payload);
+        // Pull the singular "contact" out of the payload and store it as the
+        // initial entry in the contacts array, matching the schema shape.
+        const { contact, ...rest } = payload;
+        const createPayload = {
+          ...rest,
+          contacts: contact ? [contact] : [],
+        };
+        await Bpartner.create(createPayload);
         results.push({
           row: rowIndex,
           partnerNumber,

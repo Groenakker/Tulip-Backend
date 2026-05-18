@@ -5,6 +5,7 @@ import {
   createReceiving,
   updateReceiving,
   deleteReceiving,
+  bulkDeleteReceivings,
   getReceivingLines,
   addReceivingLine,
   updateReceivingLine,
@@ -19,8 +20,10 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Receiving", "read"), getAllReceivings);
-router.get("/:id", checkPermission("Receiving", "read"), getReceivingById);
 router.post("/", checkPermission("Receiving", "write"), createReceiving);
+// Bulk delete (must be declared before any "/:id" routes).
+router.post("/bulk-delete", checkPermission("Receiving", "delete"), bulkDeleteReceivings);
+router.get("/:id", checkPermission("Receiving", "read"), getReceivingById);
 router.put("/:id", checkPermission("Receiving", "update"), updateReceiving);
 router.delete("/:id", checkPermission("Receiving", "delete"), deleteReceiving);
 

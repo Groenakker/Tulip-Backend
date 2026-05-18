@@ -1,4 +1,10 @@
 import Instance from "../models/instances.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete instances (POST /api/instances/bulk-delete).
+export const bulkDeleteInstances = createBulkDelete(Instance, {
+  entityName: "instance",
+});
 
 export const getAllInstances = async (req, res) => {
   try {

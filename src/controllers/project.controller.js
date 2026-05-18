@@ -1,4 +1,11 @@
 import Project from "../models/projects.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete projects (POST /api/projects/bulk-delete).
+// Permission check (Projects:delete) is enforced at the route layer.
+export const bulkDeleteProjects = createBulkDelete(Project, {
+  entityName: "project",
+});
 import { uploadFileToSupabase, deleteFileFromSupabase } from "../lib/supabase.js";
 
 export const getAllProjects = async (req, res) => {

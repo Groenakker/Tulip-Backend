@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllProjects, getProjectById, createProject, updateProject, deleteProject } from "../controllers/project.controller.js";
+import { getAllProjects, getProjectById, createProject, updateProject, deleteProject, bulkDeleteProjects } from "../controllers/project.controller.js";
 import { importProjects } from "../controllers/import.controller.js";
 import { uploadProjectImage, uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
@@ -23,6 +23,9 @@ router.post(
 router.get("/:id", checkPermission("Projects", "read"), getProjectById);
 
 router.post("/", checkPermission("Projects", "write"), createProject);
+
+// Bulk delete (declared before "/:id" to avoid being captured as an id param).
+router.post("/bulk-delete", checkPermission("Projects", "delete"), bulkDeleteProjects);
 
 router.put(
   "/:id",

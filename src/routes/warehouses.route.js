@@ -4,7 +4,8 @@ import {
   getWarehouseById,
   createWarehouse,
   updateWarehouse,
-  deleteWarehouse
+  deleteWarehouse,
+  bulkDeleteWarehouses
 } from "../controllers/warehouse.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -19,6 +20,9 @@ router.get("/", checkPermission("Warehouse", "read"), getAllWarehouses);
 router.get("/:id", checkPermission("Warehouse", "read"), getWarehouseById);
 
 router.post("/", checkPermission("Warehouse", "write"), createWarehouse);
+
+// Bulk delete (must precede any "/:id" routes).
+router.post("/bulk-delete", checkPermission("Warehouse", "delete"), bulkDeleteWarehouses);
 
 router.put("/:id", checkPermission("Warehouse", "update"), updateWarehouse);
 

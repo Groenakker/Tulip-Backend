@@ -5,6 +5,7 @@ import {
   createShipping,
   updateShipping,
   deleteShipping,
+  bulkDeleteShipping,
   getShippingLines,
   addShippingLine,
   addShippingLineInstance,
@@ -21,8 +22,10 @@ const router = express.Router();
 router.use(verifyToken);
 
 router.get("/", checkPermission("Shipping", "read"), getAllShipping);
-router.get("/:id", checkPermission("Shipping", "read"), getShippingById);
 router.post("/", checkPermission("Shipping", "write"), createShipping);
+// Bulk delete (must be declared before any "/:id" routes).
+router.post("/bulk-delete", checkPermission("Shipping", "delete"), bulkDeleteShipping);
+router.get("/:id", checkPermission("Shipping", "read"), getShippingById);
 router.put("/:id", checkPermission("Shipping", "update"), updateShipping);
 router.delete("/:id", checkPermission("Shipping", "delete"), deleteShipping);
 

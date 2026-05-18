@@ -5,6 +5,7 @@ import {
   createInstance,
   updateInstance,
   deleteInstance,
+  bulkDeleteInstances,
   getInstanceByCode,
   getInstancesBySample 
 } from "../controllers/instance.controller.js";
@@ -27,6 +28,9 @@ router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstanc
 router.get("/sample/:sampleId", checkPermission("Instances", "read"), getInstancesBySample);
 
 router.post("/", checkPermission("Instances", "write"), createInstance);
+
+// Bulk delete (must precede any "/:id" routes).
+router.post("/bulk-delete", checkPermission("Instances", "delete"), bulkDeleteInstances);
 
 router.put("/:id", checkPermission("Instances", "update"), updateInstance);
 

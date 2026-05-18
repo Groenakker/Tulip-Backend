@@ -4,6 +4,7 @@ import Shipping from "../models/shipping.models.js";
 import Sample from "../models/samples.models.js";
 import Testcode from "../models/testCodes.models.js";
 import Contact from "../models/contacts.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
 
 // Add a contact directly to the embedded contacts array for a business partner
 export const addPartnerContact = async (req, res) => {
@@ -290,6 +291,13 @@ export const deletePartner = async (req, res) => {
     res.status(500).json({ message: "Failed to delete partner", error: error.message });
   }
 }
+
+// Bulk-delete business partners. Body: { ids: [...] }. Same per-tenant
+// scoping and permission requirements as the single-record delete above.
+// Implementation is the shared factory so all entities behave identically.
+export const bulkDeletePartners = createBulkDelete(Bpartner, {
+  entityName: "business partner",
+});
 
 export const getRelatedDataForPartner = async (req, res) => {
   const { id } = req.params;

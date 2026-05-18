@@ -1,5 +1,18 @@
 import Receiving from "../models/receivings.models.js";
 import ReceivingLine from "../models/receivingLines.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete receiving records (POST /api/receivings/bulk-delete).
+// Cleans up the child receiving lines so they aren't orphaned.
+export const bulkDeleteReceivings = createBulkDelete(Receiving, {
+  entityName: "receiving",
+  afterDelete: async (deletedIds, { companyId }) => {
+    await ReceivingLine.deleteMany({
+      receivingId: { $in: deletedIds },
+      ...(companyId ? { company_id: companyId } : {}),
+    });
+  },
+});
 
 export const getAllReceivings = async (req, res) => {
   try {

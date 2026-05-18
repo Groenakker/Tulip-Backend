@@ -1,4 +1,10 @@
 import Sample from "../models/samples.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete samples (POST /api/samples/bulk-delete).
+export const bulkDeleteSamples = createBulkDelete(Sample, {
+  entityName: "sample",
+});
 
 export const getAllSamples = async (req, res) => {
   try {

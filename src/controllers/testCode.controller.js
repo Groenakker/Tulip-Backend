@@ -1,4 +1,10 @@
 import Testcode from "../models/testCodes.models.js";
+import { createBulkDelete } from "../lib/bulkDelete.js";
+
+// Bulk delete test codes (POST /api/testcodes/bulk-delete).
+export const bulkDeleteTestCodes = createBulkDelete(Testcode, {
+  entityName: "test code",
+});
 
 export const getAllTestCodes = async (req, res) => {
   try {
