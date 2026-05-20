@@ -72,10 +72,35 @@ export const sendInviteEmail = async ({ to, inviteLink, inviterName, companyName
       ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()
       : "User";
 
+  // Sanitize the link so any odd characters don't break the href attribute.
+  // We always want a plain absolute URL that the email client (and any
+  // security gateway / preview pane) can recognize as a clickable link.
+  const safeLink = String(inviteLink || "").trim();
+  const brand = companyName || "Tulip";
+  const inviter = inviterName || "A teammate";
+
+  // Plain-text alternative. This is what shows up if the recipient's mail
+  // client refuses to render HTML (or in security previews that strip the
+  // <a> tag). Without this, some clients render <a href="X">Y</a> as
+  // "[X]Y" which is what was happening before.
+  const text = [
+    `You're invited to join ${brand}`,
+    "",
+    `${inviter} has invited you to collaborate as a ${prettyRole}.`,
+    "",
+    "Use the link below to set up your account:",
+    safeLink,
+    "",
+    "This invitation expires in 7 days.",
+    "",
+    `— ${brand}`,
+  ].join("\n");
+
   await transporter.sendMail({
-    from: `"${companyName || "Your App"}" <${process.env.EMAIL_USER}>`,
+    from: `"${brand}" <${process.env.EMAIL_USER}>`,
     to,
     subject: `You're invited to join ${companyName || "our platform"}`,
+    text,
     html: `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EFF3F4;padding:32px 16px;font-family:'Poppins',Arial,sans-serif;">
         <tr>
@@ -90,25 +115,34 @@ export const sendInviteEmail = async ({ to, inviteLink, inviterName, companyName
               </tr>
               <tr>
                 <td style="text-align:center;">
-                  <h1 style="margin:0 0 16px;font-size:26px;line-height:1.3;color:#1F2937;">You're invited to join ${companyName || "Tulip"}</h1>
+                  <h1 style="margin:0 0 16px;font-size:26px;line-height:1.3;color:#1F2937;">You're invited to join ${brand}</h1>
                   <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#4B5563;">
-                    <strong>${inviterName || "A teammate"}</strong> has invited you to collaborate as a ${prettyRole}.
+                    <strong>${inviter}</strong> has invited you to collaborate as a ${prettyRole}.
                   </p>
                   <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#6B7280;">
-                    Tap the button below to set up your account. We’ve kept everything light, modern, and easy—just like the ${companyName || "Tulip"} experience.
+                    Tap the button below to set up your account. We've kept everything light, modern, and easy&mdash;just like the ${brand} experience.
                   </p>
-                  <a href="${inviteLink}" style="display:inline-block;background-color:#456FB6;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:16px;letter-spacing:0.3px;">
-                    Accept Invitation
-                  </a>
+                  <!--
+                    Bulletproof button: a table-wrapped <a> renders as a real
+                    button (not as "[href]label" text) in Outlook, Gmail,
+                    Apple Mail, and most security-gateway previews.
+                  -->
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                    <tr>
+                      <td align="center" bgcolor="#456FB6" style="border-radius:10px;background-color:#456FB6;">
+                        <a href="${safeLink}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#456FB6;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:16px;letter-spacing:0.3px;font-family:'Poppins',Arial,sans-serif;">Accept Invitation</a>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
               <tr>
                 <td style="padding-top:28px;text-align:center;border-top:1px solid #E5E7EB;margin-top:28px;">
                   <p style="margin:16px 0 8px;font-size:14px;color:#6B7280;">
-                    Having trouble with the button? Paste this link into your browser:
+                    Having trouble with the button? Copy and paste this link into your browser:
                   </p>
-                  <p style="margin:0;font-size:14px;word-break:break-all;">
-                    <a href="${inviteLink}" style="color:#456FB6;text-decoration:none;">${inviteLink}</a>
+                  <p style="margin:0;font-size:14px;word-break:break-all;line-height:1.6;color:#456FB6;">
+                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" style="color:#456FB6;text-decoration:underline;">${safeLink}</a>
                   </p>
                   <p style="margin:24px 0 0;font-size:13px;color:#9CA3AF;">
                     This invitation expires in 7 days.
@@ -118,7 +152,7 @@ export const sendInviteEmail = async ({ to, inviteLink, inviterName, companyName
               <tr>
                 <td style="padding-top:24px;text-align:center;">
                   <p style="margin:0;font-size:14px;color:#6B7280;">Thank you,</p>
-                  <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1F2937;">${companyName || "The Tulip Team"}</p>
+                  <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1F2937;">${brand}</p>
                 </td>
               </tr>
             </table>

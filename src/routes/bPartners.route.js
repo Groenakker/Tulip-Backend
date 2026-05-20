@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllPartners, getPartnerById, createPartner, updatePartner, deletePartner, bulkDeletePartners, getRelatedDataForPartner, getPartnerSummary, addPartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode } from "../controllers/bPartner.controller.js";
+import { getAllPartners, getPartnerById, createPartner, updatePartner, deletePartner, bulkDeletePartners, getRelatedDataForPartner, getPartnerSummary, addPartnerContact, updatePartnerContact, deletePartnerContact, addPartnerTestCode, removePartnerTestCode } from "../controllers/bPartner.controller.js";
 import { importBusinessPartners } from "../controllers/import.controller.js";
 import { uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
@@ -34,6 +34,8 @@ router.post("/:id/contacts", checkPermission("Business Partners", "update"), add
 router.put("/:id", checkPermission("Business Partners", "update"), updatePartner);
 
 router.delete("/:id", checkPermission("Business Partners", "delete"), deletePartner);
+
+router.put("/:id/contacts/:contactId", checkPermission("Business Partners", "update"), updatePartnerContact);
 
 router.delete("/:id/contacts/:contactId", checkPermission("Business Partners", "update"), deletePartnerContact);
 

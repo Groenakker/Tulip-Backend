@@ -40,6 +40,41 @@ export const addPartnerContact = async (req, res) => {
   }
 };
 
+// Update an existing contact embedded on a business partner. Only the
+// fields supplied on req.body are touched; everything else is preserved.
+export const updatePartnerContact = async (req, res) => {
+  const { id, contactId } = req.params;
+  const { name, email, phone, jobTitle } = req.body;
+
+  try {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      return res.status(403).json({ message: "Invalid tenant context" });
+    }
+
+    const partner = await Bpartner.findOne({ _id: id, company_id: companyId });
+    if (!partner) {
+      return res.status(404).json({ message: "Partner not found" });
+    }
+
+    const contact = partner.contacts.id(contactId);
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found for this partner" });
+    }
+
+    if (name !== undefined) contact.name = name;
+    if (email !== undefined) contact.email = email;
+    if (phone !== undefined) contact.phone = phone;
+    if (jobTitle !== undefined) contact.jobTitle = jobTitle;
+
+    await partner.save();
+
+    res.json({ message: "Contact updated", contact });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update contact", error: error.message });
+  }
+};
+
 // Remove a contact from the embedded contacts array
 export const deletePartnerContact = async (req, res) => {
   const { id, contactId } = req.params;
