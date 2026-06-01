@@ -7,6 +7,7 @@ import {
   removeRoleFromUser,
   getUserPermissions,
   updateUserProfile,
+  updateUserCapacity,
 } from "../controllers/users.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -66,6 +67,16 @@ router.patch(
   uploadProfilePicture, // Handle multipart/form-data file uploads (optional)
   handleMulterError, // Handle multer errors
   updateUserProfile
+);
+
+// Daily capacity (hours per day) used by the Project Management
+// workload guard. Users can self-update; admins update others
+// via the same endpoint (the Users:update gate keeps things
+// safe at the role layer).
+router.patch(
+  "/:id/capacity",
+  checkPermission("Users", "update"),
+  updateUserCapacity
 );
 
 export default router;

@@ -138,10 +138,103 @@ const sampleSchema = new mongoose.Schema(
       labeling: { type: String }
     },
     
-    // store full submission form here so UI fields persist
-   // formData: { type: mongoose.Schema.Types.Mixed },
-     // Requested tests for this sample
-     requestedTests: [{
+    // ============================================================
+    // Additional fields mined from customer TRF / TIDS / PCF forms
+    // (Geneva Labs GLP Test Req, Bureau Veritas Medical TRF,
+    // Accuprec TIDS, Eurofins/PSL PCF). All optional. Adding new
+    // columns here is preferred over storing a free-form
+    // `formData` blob because Mongoose strict mode would strip it
+    // and audit logs would lose visibility.
+    // ============================================================
+    studyCompliance: { type: String, trim: true }, // GLP / Non-GLP / NABL (ISO 17025) / ASCA / Other
+    batchNumber: { type: String, trim: true },
+    serialNumber: { type: String, trim: true },
+    chemicalName: { type: String, trim: true },
+    casNumber: { type: String, trim: true },
+    molecularFormula: { type: String, trim: true },
+    molecularWeight: { type: String, trim: true },
+    productColor: { type: String, trim: true },
+    pH: { type: String, trim: true },
+    purityConcentration: { type: String, trim: true },
+    density: { type: String, trim: true },
+    solubility: { type: String, trim: true },
+    composition: { type: String, trim: true },
+    productType: { type: String, trim: true }, // Medical Device / Pharma / API / Herbal / Agrochem / Industrial / Food / Packaging
+    methodOfManufacturing: { type: String, trim: true }, // Injection Molded / Formulated / 3D Printed / Other
+    sterilizationDate: { type: String, trim: true },
+    sterilizedBy: { type: String, trim: true },
+
+    // Extraction details (richer than the existing
+    // extractionRatios enum — these track the test article
+    // extraction protocol the sponsor is requesting).
+    extractionMethod: { type: String, trim: true }, // All Parts / External Only Submerged / Internal Only Filled / etc.
+    polarVehicle: { type: String, trim: true }, // Physiological Saline / Distilled Water / USP 88 / Other / N/A
+    nonPolarVehicle: { type: String, trim: true }, // Cottonseed Oil / Sesame Oil / USP 88 / Other / N/A
+    extractionTemperature: { type: String, trim: true }, // 37°C / 50°C / 70°C / 121°C
+    samplesPooled: { type: String, trim: true }, // Yes / No / N/A
+    canBeCut: { type: String, trim: true }, // Yes / No / N/A
+    biohazard: { type: String, trim: true }, // Yes / No
+
+    // Detailed surface area / weight breakdowns used by
+    // hemocompatibility studies (direct vs indirect blood contact).
+    surfaceAreaDirect: { type: String, trim: true },
+    surfaceAreaIndirect: { type: String, trim: true },
+    netWeightTotal: { type: String, trim: true },
+    netWeightDirect: { type: String, trim: true },
+    netWeightIndirect: { type: String, trim: true },
+
+    // Sponsor declarations
+    predicateDevice: { type: String, trim: true }, // Supplied by Sponsor / Procured by Test facility / N/A
+    absorptionCheck: { type: String, trim: true }, // Yes / No
+    msdsAttached: { type: String, trim: true }, // Yes / No
+    coaAttached: { type: String, trim: true }, // Yes / No
+    cadDrawingsAttached: { type: String, trim: true }, // Yes / No
+    productStable: { type: String, trim: true }, // Yes / No
+    doseFormulationAnalysisRequired: { type: String, trim: true }, // Yes / No
+
+    // Regulatory classifications
+    mdrClassification: { type: String, trim: true }, // I / IIa / IIb / III
+    mdrRule: { type: String, trim: true }, // 1-21
+    indianMdrClass: { type: String, trim: true }, // A / B / C / D
+    fdaClassification: { type: String, trim: true }, // I / II / III
+    bodyContactNature: { type: String, trim: true }, // Intact skin / Intact mucosal / Breached / Circulating blood
+
+    // Logistics + sponsor signoff
+    packagingDetails: { type: String, trim: true },
+    totalQuantitySupplied: { type: String, trim: true },
+    numberOfSamplesShipped: { type: String, trim: true },
+    supplierName: { type: String, trim: true },
+    transportationDetails: { type: String, trim: true },
+    handlingRequirements: { type: String, trim: true },
+    testArticleNameForReport: { type: String, trim: true },
+    vatNumber: { type: String, trim: true },
+    mailingList: { type: String, trim: true },
+    controlArticle: { type: String, trim: true },
+    specialInstructions: { type: String, trim: true },
+    solventForMoistening: { type: String, trim: true },
+    sampleStability: { type: String, trim: true },
+    sponsorRepresentative: { type: String, trim: true },
+    sponsorSignatureDate: { type: String, trim: true },
+
+    // ------------------------------------------------------------
+    // Dynamic custom fields the user adopted from a BP-uploaded
+    // document. The Sample Submission UI suggests these based on
+    // labels the document scanner extracted; the user clicks
+    // "Add" and the label+value get persisted here. Keeps the
+    // form flexible without forcing a schema migration for every
+    // novel TRF a customer ships us.
+    // ------------------------------------------------------------
+    customFields: [{
+      key: { type: String, trim: true }, // normalized identifier (camelCase or normalizedKey)
+      label: { type: String, trim: true }, // human-readable label as shown in the form
+      value: { type: String, trim: true },
+      sourceDocumentId: { type: mongoose.Schema.Types.ObjectId }, // BP sampleDocuments._id
+      sourceBPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: "Bpartner" },
+      addedAt: { type: Date, default: Date.now },
+    }],
+
+    // Requested tests for this sample
+    requestedTests: [{
       testCodeId: { type: mongoose.Schema.Types.ObjectId, ref: "Testcode" },
       grkCode: { type: String },
       description: { type: String },

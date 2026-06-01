@@ -1,6 +1,14 @@
 import express from "express";
 import { getAllProjects, getProjectById, createProject, updateProject, deleteProject, bulkDeleteProjects } from "../controllers/project.controller.js";
 import { importProjects } from "../controllers/import.controller.js";
+import {
+  addProjectMember,
+  updateProjectMember,
+  removeProjectMember,
+  setProjectTags,
+  getTeamSummary,
+  getProjectInsights,
+} from "../controllers/task.controller.js";
 import { uploadProjectImage, uploadImportFile, handleMulterError } from "../middleware/upload.middleware.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -36,5 +44,18 @@ router.put(
 );
 
 router.delete("/:id", checkPermission("Projects", "delete"), deleteProject);
+
+// ---------- Project Management extensions ----------
+// Team members on the project (separate from tenant-wide roles).
+router.get("/:id/team-summary", checkPermission("Projects", "read"), getTeamSummary);
+router.post("/:id/members", checkPermission("Projects", "update"), addProjectMember);
+router.put("/:id/members/:memberId", checkPermission("Projects", "update"), updateProjectMember);
+router.delete("/:id/members/:memberId", checkPermission("Projects", "update"), removeProjectMember);
+
+// Tag palette for tasks on this project.
+router.put("/:id/tags", checkPermission("Projects", "update"), setProjectTags);
+
+// Aggregated insights for the Insights tab.
+router.get("/:id/insights", checkPermission("Projects", "read"), getProjectInsights);
 
 export default router;

@@ -114,6 +114,56 @@ const bpartnerSchema = new mongoose.Schema(
         ref: "Testcode",
       }
     ],
+    // Sample / TRF documents the partner uses. These templates show
+    // up as printable artifacts in the Shipping Log, and the document
+    // scanner mines their field labels so the Sample Submission form
+    // can suggest matching new fields.
+    //
+    // Multiple documents can be uploaded per BP, but exactly one is
+    // flagged `isCurrent`. The "current working version" is what the
+    // Sample Submission form pulls candidate custom fields from, and
+    // what the Shipping Log surfaces in its "Print BP Documents"
+    // button. Older / superseded versions stay in the array as
+    // history.
+    sampleDocuments: [
+      {
+        filename: { type: String, required: true, trim: true },
+        url: { type: String, required: true },
+        path: { type: String },
+        mimeType: { type: String },
+        size: { type: Number },
+        category: {
+          type: String,
+          enum: ["Test Request Form", "TIDS", "PCF", "MSDS", "COA", "Specification", "Other"],
+          default: "Test Request Form",
+        },
+        description: { type: String, trim: true },
+        uploadedAt: { type: Date, default: Date.now },
+        uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        // The "current working version" flag. Exactly one sample
+        // document per BP should be true at a time. Newly uploaded
+        // docs are flagged true automatically (the upload supersedes
+        // the previous current version) and the flag can be moved
+        // explicitly via setCurrentPartnerDocument().
+        isCurrent: { type: Boolean, default: false },
+        // Scanner output: extracted plaintext + the label/field
+        // candidates the scanner detected (used by Sample Submission
+        // to suggest custom fields the user can adopt).
+        extractedText: { type: String },
+        scannedAt: { type: Date },
+        detectedFields: [
+          {
+            label: { type: String, trim: true },
+            normalizedKey: { type: String, trim: true },
+            sampleValue: { type: String, trim: true },
+            // "schema"  -> matches a known Sample field (already supported)
+            // "custom"  -> not in the schema, candidate for customFields
+            matchStatus: { type: String, enum: ["schema", "custom"], default: "custom" },
+            schemaField: { type: String },
+          },
+        ],
+      },
+    ],
   },
   { timestamps: true }
 );

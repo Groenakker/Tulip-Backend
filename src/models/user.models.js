@@ -62,6 +62,17 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: true
         },
+        // Project Management daily workload budget. The task
+        // controller rejects an assignment when an assignee's
+        // booked hours on any day in the task's range would
+        // exceed this. 8 mirrors a standard work-day; admins
+        // can adjust per user (e.g. part-time at 4).
+        dailyCapacityHours: {
+            type: Number,
+            default: 8,
+            min: 0,
+            max: 24,
+        },
     },
     {
         timestamps: true,

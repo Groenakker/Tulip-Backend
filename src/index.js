@@ -15,6 +15,7 @@ import "./lib/redis.js"; // Initialize Redis connection
 import authRoutes from "./routes/auth.route.js";
 import bPartnerRoutes from "./routes/bPartners.route.js";
 import projectRoutes from "./routes/projects.route.js";
+import tasksRoutes from "./routes/tasks.route.js";
 import testCodesRoutes from "./routes/testCodes.route.js";
 import receivingRoutes from "./routes/receivings.route.js";
 import shippingRoutes from "./routes/shipping.route.js";
@@ -33,6 +34,9 @@ import shippoRoutes from "./routes/shippo.route.js";
 import tariffCodeRoutes from "./routes/tariffCode.route.js";
 import auditLogsRoutes from "./routes/auditLogs.route.js";
 import { auditMutations } from "./lib/audit.js";
+// Toxicology workspace (ported from toxintelligence-mern).
+// Lives under src/tox/** and exposes its routes under /api/tox/v1/*.
+import { registerToxRoutes } from "./tox/registerToxRoutes.js";
 
 const app = express();
 
@@ -83,6 +87,7 @@ app.use("/api", auditMutations);
 app.use("/api/auth", authRoutes);
 app.use("/api/bpartners", bPartnerRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/tasks", tasksRoutes);
 app.use("/api/testcodes", testCodesRoutes);
 app.use("/api/receivings", receivingRoutes);
 app.use("/api/shipping", shippingRoutes);
@@ -99,6 +104,13 @@ app.use("/api/stakeholder-approval", stakeholderApprovalRoutes);
 app.use("/api/shippo", shippoRoutes);
 app.use("/api/tariff-codes", tariffCodeRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
+
+// Mount the ported ToxIntelligence API. Sits under /api/tox/v1/* so it
+// can't collide with any existing Tulip route, and its Mongoose models
+// store into tox_* collections so nothing in the shared cluster clashes
+// with Tulip's own collections. Routes are intentionally open right now
+// (no verifyToken / checkPermission) — add gating here later if desired.
+registerToxRoutes(app, "/api/tox/v1");
 
 app.listen(PORT, () => {
   console.log("server is running on port " + PORT);

@@ -12,6 +12,7 @@ import {
   updateShippingLine,
   deleteShippingLine,
   getShippingLineById,
+  getShippingFilledBpDoc,
 } from "../controllers/shipping.controller.js";
 import { verifyToken } from "../lib/utils.js";
 import { checkPermission } from "../middleware/permission.middleware.js";
@@ -30,6 +31,7 @@ router.put("/:id", checkPermission("Shipping", "update"), updateShipping);
 router.delete("/:id", checkPermission("Shipping", "delete"), deleteShipping);
 
 router.get("/:id/lines", checkPermission("Shipping", "read"), getShippingLines);
+router.get("/:id/bp-doc-filled", checkPermission("Shipping", "read"), getShippingFilledBpDoc);
 router.get("/lines/:lineId", checkPermission("Shipping", "read"), getShippingLineById);
 router.post("/:id/lines", checkPermission("Shipping", "update"), addShippingLine);
 router.post("/lines/:lineId/instances", checkPermission("Shipping", "update"), addShippingLineInstance);

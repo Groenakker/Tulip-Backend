@@ -7,6 +7,15 @@ export const getAllUsers = async (req, res) => {
     const { status, roleId } = req.query;
     const query = {};
 
+    // Tenant scoping: only ever return users from the
+    // requesting user's company. Prevents the new Project
+    // Management team picker (and any other consumer) from
+    // accidentally pulling across companies.
+    const companyId = req.user?.company_id;
+    if (companyId) {
+      query.company_id = companyId;
+    }
+
     if (status) {
       query.status = status;
     }
@@ -253,6 +262,33 @@ export const getUserPermissions = async (req, res) => {
 };
 
 // Update user profile (name, profilePicture)
+// PATCH /api/users/:id/capacity
+// Update a user's daily work-hours budget used by the Project
+// Management workload check. Self-update is always allowed;
+// otherwise the request must carry the Users:update permission
+// (the existing route layer takes care of that gating).
+export const updateUserCapacity = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dailyCapacityHours } = req.body || {};
+    const hours = Number(dailyCapacityHours);
+    if (Number.isNaN(hours) || hours < 0 || hours > 24) {
+      return res.status(400).json({ message: "dailyCapacityHours must be a number between 0 and 24" });
+    }
+
+    const companyId = req.user?.company_id;
+    const user = await User.findOneAndUpdate(
+      { _id: id, ...(companyId ? { company_id: companyId } : {}) },
+      { dailyCapacityHours: hours },
+      { new: true, runValidators: true }
+    ).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update capacity", error: err.message });
+  }
+};
+
 export const updateUserProfile = async (req, res) => {
   try {
     const { id } = req.params;

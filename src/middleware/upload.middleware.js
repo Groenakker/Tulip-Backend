@@ -105,3 +105,40 @@ const uploadSpreadsheet = multer({
 
 export const uploadImportFile = uploadSpreadsheet.single('file');
 
+// ============================================================
+// Business Partner sample documents (PDF / DOCX / XLSX)
+// ------------------------------------------------------------
+// Used by the "Sample Documents" tab on the Business Partner so a
+// customer's test request form template can be attached to the BP
+// and reprinted from the Shipping Log. Multer keeps the buffer in
+// memory; the controller hands it to Supabase and to the document
+// scanner which mines labelled fields.
+// ============================================================
+const sampleDocumentMimeTypes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel.sheet.macroenabled.12',
+  'application/octet-stream',
+]);
+const sampleDocumentExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.xlsm'];
+
+const sampleDocumentFilter = (req, file, cb) => {
+  const ext = (file.originalname || '').toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
+  if (sampleDocumentExtensions.some((e) => ext.endsWith(e)) || sampleDocumentMimeTypes.has(mime)) {
+    return cb(null, true);
+  }
+  cb(new Error('Unsupported file type. Please upload a PDF, DOC, DOCX, XLS or XLSX file.'), false);
+};
+
+const uploadSampleDocument = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: sampleDocumentFilter,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB - sample forms can include images
+});
+
+export const uploadBpSampleDocument = uploadSampleDocument.single('file');
+

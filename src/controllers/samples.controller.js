@@ -119,7 +119,6 @@ export const createSample = async (req, res) => {
       ...body,
       sampleCode,
       description: body.description || body.sampleDescription || body.formData?.sampleDescription,
-      formData: body.formData || body,
       company_id: body.company_id
     });
     await sample.save();
@@ -142,7 +141,6 @@ export const updateSample = async (req, res) => {
     const updateData = {
       ...body,
       description: body.description || body.sampleDescription || body.formData?.sampleDescription,
-      formData: body.formData || body,
     };
 
     // Add company_id if provided
